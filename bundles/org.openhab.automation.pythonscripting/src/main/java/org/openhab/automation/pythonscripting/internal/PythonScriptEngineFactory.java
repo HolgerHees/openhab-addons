@@ -13,6 +13,7 @@
 package org.openhab.automation.pythonscripting.internal;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import javax.script.ScriptEngine;
@@ -61,10 +62,16 @@ public class PythonScriptEngineFactory extends AbstractScriptEngineFactory {
     }
 
     @Override
+    public void scopeValues(ScriptEngine scriptEngine, Map<String, Object> scopeValues) {
+        // noop; they are retrieved via modules, not injected
+    }
+
+    @Override
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
         if (!scriptTypes.contains(scriptType)) {
             return null;
         }
-        return factory.getScriptEngine();
+        return new DebuggingGraalScriptEngine<>(new OpenhabGraalPythonScriptEngine(true, true));
+        // factory.getScriptEngine();
     }
 }
