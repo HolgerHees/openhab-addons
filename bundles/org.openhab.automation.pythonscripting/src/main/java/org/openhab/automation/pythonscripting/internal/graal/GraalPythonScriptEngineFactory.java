@@ -85,7 +85,7 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
     @Override
     public List getExtensions() {
-        return List.of(LANGUAGE_ID);
+        return List.of(LANGUAGE_ID, "py");
     }
 
     @Override
@@ -293,7 +293,7 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
         @Override
         public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
-            throw new UnsupportedOperationException();
+            return null;
         }
 
         @Override

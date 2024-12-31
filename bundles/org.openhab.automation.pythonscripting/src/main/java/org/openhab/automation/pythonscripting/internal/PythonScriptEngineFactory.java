@@ -22,6 +22,8 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngineFactory;
 import org.openhab.core.automation.module.script.AbstractScriptEngineFactory;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
+import org.openhab.core.config.core.ConfigurableService;
+import org.osgi.framework.Constants;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
@@ -31,13 +33,15 @@ import org.osgi.service.component.annotations.Deactivate;
  *
  * @author Holger Hees - Further development
  */
-@Component(service = ScriptEngineFactory.class)
+@Component(service = ScriptEngineFactory.class, configurationPid = "org.openhab.pythonscripting", property = Constants.SERVICE_PID
+        + "=org.openhab.pythonscripting")
+@ConfigurableService(category = "automation", label = "Python Scripting", description_uri = "automation:pythonscripting")
 @NonNullByDefault
 public class PythonScriptEngineFactory extends AbstractScriptEngineFactory {
 
     private static final GraalPythonScriptEngineFactory factory = new GraalPythonScriptEngineFactory();
 
-    private final List<String> scriptTypes = (List<String>) Stream.of(factory.getExtensions(), factory.getMimeTypes())
+    private final List<String> scriptTypes = (List<String>) Stream.of(factory.getExtensions(), factory.getMimeTypes()) //
             .flatMap(List::stream) //
             .toList();
 
