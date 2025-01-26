@@ -1,5 +1,6 @@
 import java
 #from polyglot import register_interop_type
+from inspect import isfunction, isclass
 
 import os
 import sys
@@ -10,10 +11,11 @@ from openhab.services import get_service
 
 # **** REGISTER LOGGING AND EXCEPTION HOOK AS SOON AS POSSIBLE ****
 Java_LogFactory = java.type("org.slf4j.LoggerFactory")
-LOG_PREFIX = "org.openhab.core.automation.pythonscripting"
+LOG_PREFIX = "org.openhab.automation.pythonscripting"
 if '__file__' in scope:
     file_package = os.path.basename(scope['__file__'])[:-3]
     LOG_PREFIX = "{}.{}".format(LOG_PREFIX, file_package)
+file_package = os.path.basename(scope['__file__'])[:-3]
 logger = Java_LogFactory.getLogger( LOG_PREFIX )
 
 #def scriptUnloaded():
@@ -26,7 +28,7 @@ def excepthook(exctype, excvalue, tb):
     logger.error("Traceback (most recent call last):")
     logger.error("  File \"{}\", line {}, in {}".format(filename, line_no, name))
     logger.error("{}, {}".format(exctype.__name__, excvalue))
-    #logger.error("{}, {} in file \"{}\", line {}, in {}".format(exctype.__name__, excvalue, filename, line_no, name))
+    logger.error("{}, {} in file \"{}\", line {}, in {}".format(exctype.__name__, excvalue, filename, line_no, name))
 sys.excepthook = excepthook
 # *****************************************************************
 
@@ -84,16 +86,30 @@ class rule():
         self.conditions = conditions
         self.profile = profile
 
-    def __call__(self, clazz):
+    def __call__(self, clazzOrFunc):
         proxy = self
 
-        class_package = proxy.getClassPackage(clazz.__name__)
+        if isfunction(clazzOrFunc):
+            class_package = clazzOrFunc.__name__
+            _rule_obj = clazzOrFunc
+        else:
+            class_package = proxy.getClassPackage(clazzOrFunc.__name__)
+            _rule_obj = clazzOrFunc()
 
-        clazz.logger = Java_LogFactory.getLogger( "{}.{}".format(LOG_PREFIX, class_package) )
+        clazzOrFunc.logger = Java_LogFactory.getLogger( LOG_PREFIX + "." + file_package + "." + class_package )
 
-        _rule_obj = clazz()
+        if hasattr(_rule_obj, "_triggers"):
+            logger.info("_rule_obj has _triggers")
+            _triggers = _rule_obj._triggers
+        else:
+            _triggers = []
 
-        _triggers = []
+        if hasattr(_rule_obj, "_conditions"):
+            logger.info("_rule_obj has _conditions")
+            _conditions = _rule_obj._conditions
+        else:
+            _conditions = []
+
         if proxy.triggers is not None:
             _triggers = proxy.triggers
         elif hasattr(_rule_obj, "_when_triggers"):
@@ -111,7 +127,8 @@ class rule():
                 _valid_items[cfg.get("groupName") ] = True
             _raw_triggers.append(trigger.raw_trigger)
 
-        clazz.execute = proxy.executeWrapper(clazz.execute, _valid_items)
+        if not isfunction(clazzOrFunc):
+            clazzOrFunc.execute = proxy.executeWrapper(clazzOrFunc.execute, _valid_items)
 
         _conditions = []
         if proxy.conditions is not None:
@@ -134,7 +151,10 @@ class rule():
                 Java_SimpleRule.__init__(self)
 
             def execute(self, module, input):
-                _rule_obj.execute(module, input)
+                if isfunction(_rule_obj):
+                    _rule_obj(module, input)
+                else:
+                    _rule_obj.execute(module, input)
 
         _base_obj = BaseSimpleRule()
 
@@ -148,15 +168,15 @@ class rule():
             _base_obj.setTags(Set(proxy.tags))
 
         if len(_raw_triggers) == 0:
-            clazz.logger.warn("Rule '{}' has no triggers".format(name))
+            clazzOrFunc.logger.warn("Rule '{}' has no triggers".format(name))
         else:
             _base_obj.setTriggers(_raw_triggers)
 
-            if len(_raw_conditions) > 0:
-                _base_obj.setConditions(_raw_conditions)
+        if len(_raw_conditions) > 0:
+            _base_obj.setConditions(_raw_conditions)
 
-            automationManager.addRule(_base_obj)
-            clazz.logger.info("Rule '{}' initialised".format(name))
+        automationManager.addRule(_base_obj)
+        clazzOrFunc.logger.info("Rule '{}' initialised".format(name))
 
         return _rule_obj
 
@@ -170,7 +190,7 @@ class rule():
             return class_name[:-4]
         return class_name
 
-    def executeWrapper(self,func, valid_items):
+    def executeWrapper(self, func, valid_items):
         proxy = self
 
         def appendDetailInfo(self,event):
