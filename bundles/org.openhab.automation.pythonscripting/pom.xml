@@ -23,7 +23,7 @@
       !jdk.vm.ci.services
     </bnd.importpackage>
 
-    <graalpy.version>24.1.1</graalpy.version>
+    <graalpy.version>24.2.0</graalpy.version>
   </properties>
 
   <build>
