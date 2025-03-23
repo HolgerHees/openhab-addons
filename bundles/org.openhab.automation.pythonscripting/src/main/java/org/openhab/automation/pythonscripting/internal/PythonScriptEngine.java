@@ -53,8 +53,8 @@ import org.openhab.automation.pythonscripting.internal.fs.DelegatingFileSystem;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
 import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.scriptengine.InvocationInterceptingScriptEngineWithInvocableAndCompilableAndAutoCloseable;
+import org.openhab.automation.pythonscripting.internal.scriptengine.helper.LifecycleTracker;
 import org.openhab.automation.pythonscripting.internal.scriptengine.helper.LogOutputStream;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ScriptUnloadTracker;
 import org.openhab.automation.pythonscripting.internal.wrapper.ScriptExtensionModuleProvider;
 import org.openhab.core.OpenHAB;
 import org.openhab.core.automation.module.script.ScriptExtensionAccessor;
@@ -140,7 +140,7 @@ public class PythonScriptEngine
     // these fields start as null because they are populated on first use
     private @Nullable Consumer<String> scriptDependencyListener;
     private final ScriptExtensionModuleProvider scriptExtensionModuleProvider;
-    private final ScriptUnloadTracker scriptUnloadTracker;
+    private final LifecycleTracker lifecycleTracker;
 
     private PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 
@@ -166,9 +166,8 @@ public class PythonScriptEngine
         scriptOutputStream = new LogOutputStream(logger, Level.INFO);
         scriptErrorStream = new LogOutputStream(logger, Level.ERROR);
 
-        scriptUnloadTracker = new ScriptUnloadTracker();
+        lifecycleTracker = new LifecycleTracker();
         scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
-        scriptExtensionModuleProvider.put("unloadTracker", scriptUnloadTracker);
 
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .out(scriptOutputStream) //
@@ -249,12 +248,11 @@ public class PythonScriptEngine
             return;
         }
 
-        // needed to get ThreadGroups working in JDK17 (openhab4)
-        // otherwise, Python threads are not working properly.
-        // - if ThreadGroups.isDaemon == true and last python thread is done, ThreadGroup is closed and new python
-        // threads can't started anymore
-        // - in jdk21 is handled differently... ThreadGroups does not use the daemon flag anymore and ThreadGroups are
-        // not closeale anymore
+        // needed to get ThreadGroups working in JDK17 (openhab4). Otherwise, Python threads are not working properly.
+        // - if ThreadGroups.isDaemon == true and last python thread is done
+        // ==> ThreadGroup is closed and new python threads can't started anymore
+        // - in jdk21 is handled differently
+        // ==> ThreadGroups does not use the daemon flag anymore and ThreadGroups are not closable anymore
         // - can be removed in jdk21 only environments
         Thread.currentThread().getThreadGroup().setDaemon(false);
 
@@ -368,6 +366,11 @@ public class PythonScriptEngine
             // super.put("__file__", value);
             super.put(key, value);
         } else {
+            // use a custom lifecycleTracker to handle dispose hook before polyglot context is closed
+            // original lifecycleTracker is handling it when polyglot context is already closed
+            if ("lifecycleTracker".equals(key)) {
+                value = lifecycleTracker;
+            }
             if (pythonScriptEngineConfiguration.isScopeEnabled()) {
                 scriptExtensionModuleProvider.put(key, value);
             } else {
@@ -420,7 +423,7 @@ public class PythonScriptEngine
             throws ScriptException, NoSuchMethodException, NullPointerException {
 
         if ("scriptUnloaded".equals(s)) {
-            this.scriptUnloadTracker.dispose();
+            this.lifecycleTracker.dispose();
             logger.debug("Engine disposed.");
         }
 
