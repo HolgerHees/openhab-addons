@@ -145,6 +145,7 @@ public class PythonScriptEngine
     private PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 
     private boolean initialized = false;
+    private boolean closed = false;
 
     private final LogOutputStream scriptOutputStream;
     private final LogOutputStream scriptErrorStream;
@@ -339,7 +340,7 @@ public class PythonScriptEngine
 
     @Override
     protected Exception afterThrowsInvocation(Exception e) {
-        // OPS4J Pax Logging holds a reference to the exception, which causes the OpenhabGraalJSScriptEngine to not be
+        // OPS4J Pax Logging holds a reference to the exception, which causes the PythonScriptEngine to not be
         // removed from heap by garbage collection and causing a memory leak.
         // Therefore, don't pass the exceptions itself to the logger, but only their message!
         if (e instanceof ScriptException) {
@@ -419,21 +420,31 @@ public class PythonScriptEngine
     }
 
     @Override
-    public Object invokeFunction(String s, Object... objects)
-            throws ScriptException, NoSuchMethodException, NullPointerException {
+    public void close() throws Exception {
+        lock.lock();
 
-        if ("scriptUnloaded".equals(s)) {
-            this.lifecycleTracker.dispose();
+        if (!closed) {
+            try {
+                this.lifecycleTracker.dispose();
+            } catch (Exception e) {
+                logger.warn("Ignoreable exception during dispose: {}", stringifyThrowable(e));
+            }
             logger.debug("Engine disposed.");
+
+            try {
+                super.close();
+            } catch (Exception e) {
+                logger.warn("Ignoreable exception during close: {}", stringifyThrowable(e));
+            }
+
+            logger.debug("Engine closed.");
+
+            closed = true;
+        } else {
+            logger.debug("Engine already disposed and closed.");
         }
 
-        return super.invokeFunction(s, objects);
-    }
-
-    @Override
-    public void close() throws Exception {
-        super.close();
-        logger.debug("Engine closed.");
+        lock.unlock();
     }
 
     @Override
