@@ -153,12 +153,6 @@ public class PythonScriptEngine
     /**
      * Creates an implementation of ScriptEngine {@code (& Invocable)}, wrapping the contained engine,
      * that tracks the script lifecycle and provides hooks for scripts to do so too.
-     *
-     * @param pythonDependencyTracker
-     * @param injectionEnabled
-     * @param scopeEnabled
-     * @param cachingEnabled
-     * @param jythonEmulation
      */
     public PythonScriptEngine(PythonDependencyTracker pythonDependencyTracker,
             PythonScriptEngineConfiguration pythonScriptEngineConfiguration) {
@@ -249,6 +243,14 @@ public class PythonScriptEngine
             return;
         }
 
+        // needed to get ThreadGroups working in JDK17 (openhab4). Otherwise, Python threads are not working properly.
+        // - if ThreadGroups.isDaemon == true and last python thread is done
+        // ==> ThreadGroup is closed and new python threads can't started anymore
+        // - in jdk21 is handled differently
+        // ==> ThreadGroups does not use the daemon flag anymore and ThreadGroups are not closable anymore
+        // - can be removed in jdk21 only environments
+        Thread.currentThread().getThreadGroup().setDaemon(false);
+
         logger.debug("Initializing GraalPython script engine...");
 
         ScriptContext ctx = getScriptContext();
@@ -295,7 +297,8 @@ public class PythonScriptEngine
                             .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>").build());
                 }
             } catch (IOException e) {
-                throw new IllegalArgumentException("Failed to generate import wrapper", e);
+                logger.error("Failed to inject import wrapper", e);
+                throw new IllegalArgumentException("Failed to inject import wrapper", e);
             }
         }
 
@@ -356,7 +359,6 @@ public class PythonScriptEngine
     // collect JSR223 (scope) variables separately, because they are delivered via 'import scope'
     public void put(String key, Object value) {
         if ("javax.script.filename".equals(key)) {
-            // super.put("__file__", value);
             super.put(key, value);
         } else {
             // use a custom lifecycleTracker to handle dispose hook before polyglot context is closed
@@ -397,11 +399,7 @@ public class PythonScriptEngine
     @Override
     public boolean tryLock(long l, TimeUnit timeUnit) throws InterruptedException {
         boolean acquired = lock.tryLock(l, timeUnit);
-        if (acquired) {
-            logger.debug("Lock acquired.");
-        } else {
-            logger.debug("Lock not acquired.");
-        }
+        logger.debug("{}", acquired ? "Lock acquired." : "Lock not acquired.");
         return acquired;
     }
 

@@ -78,7 +78,6 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
 
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
         Engine engineToUse = (engine != null) ? engineToUse = engine : factory.getPolyglotEngine();
-        // this.factory = (factory == null) ? new GraalPythonScriptEngineFactory(engineToUse) : factory;
 
         Context.Builder contextConfigToUse = contextConfig;
         if (contextConfigToUse == null) {
@@ -165,7 +164,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
         try {
-            try {
+            try (reader) {
                 while (true) {
                     final int count = reader.read(buffer);
                     if (count == -1) {
@@ -173,8 +172,6 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
                     }
                     builder.append(buffer, 0, count);
                 }
-            } finally {
-                reader.close();
             }
             return builder.toString();
         } catch (IOException ioex) {
@@ -259,8 +256,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     private Context createContext(Bindings engineB) {
         Object ctx = engineB.get(POLYGLOT_CONTEXT);
         if (!(ctx instanceof Context)) {
-            Context.Builder builder = contextConfig;
-            ctx = createDefaultContext(builder, context);
+            ctx = createDefaultContext(contextConfig, context);
             engineB.put(POLYGLOT_CONTEXT, ctx);
         }
         return (Context) ctx;
