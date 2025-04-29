@@ -388,11 +388,7 @@ public class PythonScriptEngine
     @Override
     public boolean tryLock() {
         boolean acquired = lock.tryLock();
-        if (acquired) {
-            logger.debug("Lock acquired.");
-        } else {
-            logger.debug("Lock not acquired.");
-        }
+        logger.debug("{}", acquired ? "Lock acquired." : "Lock not acquired.");
         return acquired;
     }
 
@@ -488,7 +484,7 @@ public class PythonScriptEngine
     }
 
     private static Set<String> transformGraalWrapperSet(Value value) {
-        Set<String> set = new HashSet<String>();
+        Set<String> set = new HashSet<>();
         for (int i = 0; i < value.getArraySize(); ++i) {
             Value element = value.getArrayElement(i);
             set.add(element.asString());

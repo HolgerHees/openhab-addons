@@ -58,16 +58,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     private static final String PYTHON_OPTION_FORCEIMPORTSITE = "python.ForceImportSite";
     private static final String PYTHON_OPTION_CHECKHASHPYCSMODE = "python.CheckHashPycsMode";
 
-    static final String MAGIC_OPTION_PREFIX = "polyglot.py.";
-
     private final Logger logger = LoggerFactory.getLogger(GraalPythonScriptEngine.class);
-
-    interface MagicBindingsOptionSetter {
-
-        String getOptionKey();
-
-        Context.Builder setOption(Builder builder, Object value);
-    }
 
     private final GraalPythonScriptEngineFactory factory;
     private final Context.Builder contextConfig;
@@ -77,7 +68,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     }
 
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
-        Engine engineToUse = (engine != null) ? engineToUse = engine : factory.getPolyglotEngine();
+        Engine engineToUse = (engine != null) ? engine : factory.getPolyglotEngine();
 
         Context.Builder contextConfigToUse = contextConfig;
         if (contextConfigToUse == null) {
@@ -145,13 +136,13 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     public void setBindings(Bindings bindings, int scope) {
         if (scope == ScriptContext.ENGINE_SCOPE) {
             Bindings oldBindings = getBindings(scope);
-            if (oldBindings instanceof GraalPythonBindings) {
-                ((GraalPythonBindings) oldBindings).updateEngineScriptContext(null);
+            if (oldBindings instanceof GraalPythonBindings gpBindings) {
+                gpBindings.updateEngineScriptContext(null);
             }
         }
         super.setBindings(bindings, scope);
-        if (scope == ScriptContext.ENGINE_SCOPE && (bindings instanceof GraalPythonBindings)) {
-            ((GraalPythonBindings) bindings).updateEngineScriptContext(getContext());
+        if (scope == ScriptContext.ENGINE_SCOPE && bindings instanceof GraalPythonBindings gpBindings) {
+            gpBindings.updateEngineScriptContext(getContext());
         }
     }
 
