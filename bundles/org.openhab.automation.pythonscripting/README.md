@@ -3,15 +3,17 @@
 This add-on provides support for Python 3 that can be used as a scripting language within automation rules.
 It is based on [GraalPy](https://www.graalvm.org/python/) from the [GraalVM project](https://www.graalvm.org/).
 
-Also included is [openhab-python](https://github.com/openhab/openhab-python), a python library to support automation in openHAB. It provides convenient access to common core openHAB functions that make the full range of Java APIs easily accessible and usable.
+Also included is [openhab-python](https://github.com/openhab/openhab-python), a Python library to support automation in openHAB.
+It provides convenient access to common core openHAB functions that make the full range of Java APIs easily accessible and usable.
 
 [[toc]]
 
 ## Creating Python Scripts
 
-When this add-on is installed, you can select Python3 as a scripting language when creating a script action within the rule editor of the UI.
+When this add-on is installed, you can select Python 3 as a scripting language when creating a script action within the rule editor of the UI.
 
-Alternatively, you can create scripts in the `automation/python` configuration directory. If you create an empty file called `test.py`, you will see a log line with information similar to:
+Alternatively, you can create scripts in the `automation/python` configuration directory.
+If you create an empty file called `test.py`, you will see a log line with information similar to:
 
 ```text
 ... [INFO ] [ort.loader.AbstractScriptFileWatcher] - (Re-)Loading script '/openhab/conf/automation/python/test.py'
@@ -69,9 +71,17 @@ Use Python Scripting as script transformation by:
    The script should take one argument `input` and return a value that supports `toString()` or `null`:
 
    ```python
+   "String has " + str(len(input)) + " characters"
+   ```
+
+   or 
+   
+   ```python
    def calc(input):
-       # Do some data transformation here, e.g.
-       return "String has" + data.length + "characters";
+       if input is None:
+           return 0
+
+       return "String has " + str(len(input)) + " characters"
    calc(input)
    ```
 
@@ -79,7 +89,7 @@ Use Python Scripting as script transformation by:
 3. Passing parameters is also possible by using a URL like syntax: `PY(<scriptname>.py?arg=value)`.
    Parameters are injected into the script and can be referenced like variables.
 
-Simple transformations can also be given as an inline script: `PY(|...)`, e.g. `PY(|"String has " + input.length + "characters")`.
+Simple transformations can also be given as an inline script: `PY(|...)`, e.g. `PY(|"String has " + str(len(input)) + "characters")`.
 It should start with the `|` character, quotes within the script may need to be escaped with a backslash `\` when used with another quoted string as in text configurations.
 
 ::: tip Note
@@ -299,7 +309,8 @@ The type of the event can also be queried via [AbstractEvent.getTopic](https://w
 
 ### module scope
 
-The scope module encapsulates all [default jsr223 objects/presents](https://www.openhab.org/docs/configuration/jsr223.html#default-preset-importpreset-not-required) into a new object. You can use it like below
+The scope module encapsulates all [default jsr223 objects/presents](https://www.openhab.org/docs/configuration/jsr223.html#default-preset-importpreset-not-required) into a new object.
+You can use it like below
 
 ```python
 from scope import * # this makes all jsr223 objects available
@@ -362,7 +373,7 @@ print(str(OpenHAB.getVersion()))
 | Ping                     | see [openHAB Ping API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/ping)        |                                                                          |
 | ScriptExecution          | see [openHAB ScriptExecution API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/scriptexecution) |                                                           |
 | Semantic                 | see [openHAB Semantic API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/semantic) |                                                                         |
-| ThingAction              | see [openHAB ThingAction API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/things) |                                                                        |
+| Things                   | see [openHAB Things API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/things) |                                                                        |
 | Transformation           | see [openHAB Transformation API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/transformation) |                                                             |
 | Voice                    | see [openHAB Voice API](https://www.openhab.org/javadoc/latest/org/openhab/core/model/script/actions/voice)      |                                                                          |
 | NotificationAction       |                                                                                       | e.g. NotificationAction.sendNotification("test@test.org", "Window is open")                         |
@@ -404,12 +415,14 @@ print(str(OpenHAB.getVersion()))
 | ------------------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | getThing                 | getThing(uid)                                                                         | [Thing](#class-thing)                                                                               |
 | getChannel               | getChannel(uid)                                                                       | [Channel](#class-channel)                                                                           |
-| getItem                  | getItem(item_name)                                                                    | [Item](#class-item) or [GroupItem](#class-groupitem)                                                |
-| resolveItem              | resolveItem(item_or_item_name)                                                        | [Item](#class-item) or [GroupItem](#class-groupitem)                                                |
-| getItemState             | getItemState(item_name, default = None)                                               | [openHAB State](https://www.openhab.org/javadoc/latest/org/openhab/core/types/state)                |
 | getItemMetadata          | getItemMetadata(item_or_item_name, namespace)                                         | [openHAB Metadata](https://www.openhab.org/javadoc/latest/org/openhab/core/items/metadata)          |
 | setItemMetadata          | setItemMetadata(item_or_item_name, namespace, value, configuration=None)              | [openHAB Metadata](https://www.openhab.org/javadoc/latest/org/openhab/core/items/metadata)          |
 | removeItemMetadata       | removeItemMetadata(item_or_item_name, namespace = None)                               | [openHAB Metadata](https://www.openhab.org/javadoc/latest/org/openhab/core/items/metadata)          |
+| getItemState             | getItemState(item_name, default = None)                                               | [openHAB State](https://www.openhab.org/javadoc/latest/org/openhab/core/types/state)                |
+| getItem                  | getItem(item_name)                                                                    | [Item](#class-item) or [GroupItem](#class-groupitem)                                                |
+| resolveItem              | resolveItem(item_or_item_name)                                                        | [Item](#class-item) or [GroupItem](#class-groupitem)                                                |
+| addItem                  | addItem(item_config)                                                                  | [Item](#class-item) or [GroupItem](#class-groupitem)                                                |
+| safeItemName             | safeItemName(item_name)                                                               |                                                 |
 
 
 ### class Item 
@@ -516,7 +529,8 @@ Timer.createTimeout(60, test)
 
 Below is a complex example of 2 sensor values that are expected to be transmitted in a certain time window (e.g. one after the other).
 
-After the first state change, the timer wait 5 seconds, before it updates the final target value. If the second value arrives before this time frame, the final target value is updated immediately.
+After the first state change, the timer wait 5 seconds, before it updates the final target value.
+If the second value arrives before this time frame, the final target value is updated immediately.
 
 ```python
 from openhab import rule, Registry
@@ -544,31 +558,32 @@ class UpdateInfo:
 
 ### Python <=> Java conversion
 
-Conversion occurs in both directions
+In addition to standard [value type mappings](https://www.graalvm.org/python/docs/#mapping-types-between-python-and-other-languages), the following type mappings are available.
 
 | Python class              | Java class    |
 | ------------------------- | ------------- |
 | datetime with timezone    | ZonedDateTime |
 | datetime without timezone | Instant       |
 | timedelta                 | Duration      |
-| list                      | Collection    |
-| Set(set)                  | Set           |
+| list                      | Set           |
 | Item                      | Item          |
 
-### typical log errors
+### Typical log errors
 
 #### Exception during helper lib initialisation
 
-There were problems during the deployment of the helper libs. A typical error is an insufficient permission. The folder "conf/automation/python/" must be writeable by openHAB.
+There were problems during the deployment of the helper libs.
+A typical error is an insufficient permission.
+The folder "conf/automation/python/" must be writeable by openHAB.
 
 #### Failed to inject import wrapper
 
-The reading the python source file "conf/automation/python/lib/openhab/__wrapper__.py" failed.
+The reading the Python source file "conf/automation/python/lib/openhab/__wrapper__.py" failed.
 
-This could either a permission/owner problem or a problem during deployment of the helper libs. You should check that this file exists and it is readable by openHAB. You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib"
+This could either a permission/owner problem or a problem during deployment of the helper libs.
+You should check that this file exists and it is readable by openHAB.
+You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib".
 
-### limitations
+### Limitations
 
 - GraalPy can't handle arguments in constructors of Java objects. Means you can't instantiate a Java object in Python with a parameter. https://github.com/oracle/graalpython/issues/367
-- GraalPy does not really support Python 'set' types as arguments of function calls to Java objects https://github.com/oracle/graalpython/issues/260
-  - The reason is that Java is not able to distinguish what is a Python list and what is a Python set. A workaround is to use the class [Set](#class-set)
