@@ -186,6 +186,17 @@ public class PythonScriptEngine
                                 }
                                 super.checkAccess(path, modes, linkOptions);
                             }
+
+                            @Override
+                            public Path getTempDirectory() {
+                                return Paths.get("/openhab/.cache/org.graalvm.polyglot/python/python-home/vtmp/");
+                            }
+
+                            @Override
+                            public void setAttribute(Path path, String attribute, Object value, LinkOption... options)
+                                    throws IOException {
+                                Files.setAttribute(path, attribute, value, options);
+                            }
                         }).build()) //
                 .allowHostAccess(HOST_ACCESS) //
                 // usage of .allowAllAccess(true) includes
@@ -207,23 +218,20 @@ public class PythonScriptEngine
                 .option(PYTHON_OPTION_POSIXMODULEBACKEND, "java") //
                 // Force to automatically import site.py module, to make Python packages available
                 .option(PYTHON_OPTION_FORCEIMPORTSITE, Boolean.toString(true)) //
-                // The sys.executable path, a virtual path that is used by the interpreter
-                // to discover packages
-                .option(PYTHON_OPTION_EXECUTABLE,
-                        PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.resolve("bin").resolve("python").toString())
-                // Set the python home to be read from the embedded resources
-                .option(PYTHON_OPTION_PYTHONHOME, PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.toString()) //
-                // Set python path to point to sources stored in
-                .option(PYTHON_OPTION_PYTHONPATH,
-                        PythonScriptEngineFactory.PYTHON_LIB_PATH.toString() + File.pathSeparator
-                                + PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.toString())
-                // pass the path to be executed
-                .option(PYTHON_OPTION_INPUTFILEPATH, PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.toString()) //
                 // make sure the TopLevelExceptionHandler calls the excepthook to print Python exceptions
                 .option(PYTHON_OPTION_ALWAYSRUNEXCEPTHOOK, Boolean.toString(true)) //
                 // emulate jython behavior (will slowdown the engine)
                 .option(PYTHON_OPTION_EMULATEJYTHON,
-                        String.valueOf(pythonScriptEngineConfiguration.isJythonEmulation()));
+                        String.valueOf(pythonScriptEngineConfiguration.isJythonEmulation()))
+
+                .option("python.NativeModules", Boolean.toString(true)) //
+                .option("python.IsolateNativeModules", Boolean.toString(true)) //
+                .option("python.SysPrefix", "/openhab/.cache/org.graalvm.polyglot/python/python-home/venv/") //
+
+                // Set python path to point to sources stored in
+                // pass the path to be executed
+                .option(PYTHON_OPTION_PYTHONPATH, PythonScriptEngineFactory.PYTHON_LIB_PATH.toString()
+                        + File.pathSeparator + PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.toString());
 
         if (pythonScriptEngineConfiguration.isCachingEnabled()) {
             contextConfig.option(PYTHON_OPTION_DONTWRITEBYTECODEFLAG, Boolean.toString(false)) //
