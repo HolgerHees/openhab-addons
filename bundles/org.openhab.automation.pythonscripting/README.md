@@ -12,35 +12,37 @@ It provides convenient access to common core openHAB functions that make the ful
 
 VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
 
-1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check current pythonscripting environment configuration by calling 'pythonscripting info'.
+1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check current pythonscripting environment configuration by calling 'pythonscripting info'.Important values are
+- `GraalVM version: 24.2.1`
+- `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`
 
-Important values are
-- `GraalVM version: 24.2.1` hereinafter referred to as `<graalversion>`
-- `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv` hereinafter referred to as `<myvenvpath>`
+These values are needed 
 
-2. Install 'patchelf' which is needed for native module support in graalpy (optional)
+2. Download graalpy-community and create venv
+```
+wget -qO- https://github.com/oracle/graalpython/releases/download/graal-24.2.1/graalpy-community-24.2.1-linux-amd64.tar.gz | gunzip | tar xvf -
+cd graalpy-community-24.2.1-linux-amd64/
+
+./bin/graalpy -m venv /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+```
+
+::: tip Download note
+The downloaded graalpy-community tar.gz must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and the graalvm version of openhab.
+
+Additionally the venv target dir must match to the one of your installation
+:::
+
+3. Install 'patchelf' which is needed for native module support in graalpy (optional).
 ```
 apt-get install patchelf
 # zypper install patchelf
 # yum install patchelf
 ```
 
-3. Download graalpy and create venv inside `<myvenvpath>`
-```
-wget -qO- https://github.com/oracle/graalpython/releases/download/graal-<graalversion>/graalpy-community-<graalversion>-linux-amd64.tar.gz | gunzip | tar xvf -
-cd graalpy-community-<graalversion>-linux-amd64/
-
-./bin/graalpy -m venv <myvenvpath>
-```
-
 After these steps, venv setup is done and will be detected automatically during next openhab restart.
 
-::: tip Download note
-The downloaded graalpy tar must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and the graalvm version of openhab.
-:::
-
 ::: tip VEnv note
-Theoretically you can also create venvs with a native python installation too. But it is strongly recommended to use graalpy for it. It will install a "special" version of pip in this venv, which will install patched python modules if available. This increases the compatibility of graalpython.
+Theoretically you can create venvs with a native python installation too. But it is strongly recommended to use graalpy for it. It will install a "special" version of pip in this venv, which will install patched python modules if available. This increases the compatibility of python modules with graalpython.
 :::
 
 ## Creating Python Scripts
