@@ -12,7 +12,7 @@ It provides convenient access to common core openHAB functions that make the ful
 
 VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
 
-1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check current pythonscripting environment configuration by calling 'pythonscripting info'<br/><br/>Important values are:
+1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling 'pythonscripting info'<br/><br/>Important values are:
 
 - `GraalVM version: 24.2.1`
 - `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`<br/><br/>These values are needed during the next step.
