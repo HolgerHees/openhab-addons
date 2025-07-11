@@ -8,9 +8,9 @@ It provides convenient access to common core openHAB functions that make the ful
 
 [[toc]]
 
-## Enabling VEnv (optional)
+## Enabling VEnv
 
-VEnv based python runtimes are needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
+VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
 
 1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check current pythonscripting environment configuration by calling 'pythonscripting info'.
 
