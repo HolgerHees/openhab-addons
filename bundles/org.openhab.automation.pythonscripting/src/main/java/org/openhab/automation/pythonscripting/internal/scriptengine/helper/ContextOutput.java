@@ -1,0 +1,57 @@
+/*
+ * Copyright (c) 2010-2025 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
+package org.openhab.automation.pythonscripting.internal.scriptengine.helper;
+
+import java.io.IOException;
+import java.io.OutputStream;
+
+/**
+ * ContextOutput implementation
+ *
+ * @author Holger Hees - Initial contribution
+ */
+public class ContextOutput extends OutputStream {
+    private OutputStream stream;
+
+    public ContextOutput(OutputStream stream) {
+        this.stream = stream;
+    }
+
+    public void setOutputStream(OutputStream stream) {
+        this.stream = stream;
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (stream == null) {
+            return;
+        }
+        stream.close();
+    }
+
+    @Override
+    public void flush() throws IOException {
+        if (stream == null) {
+            return;
+        }
+        stream.flush();
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+        if (stream == null) {
+            return;
+        }
+        stream.write(b);
+    }
+}

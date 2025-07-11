@@ -8,6 +8,37 @@ It provides convenient access to common core openHAB functions that make the ful
 
 [[toc]]
 
+## Enabling VEnv (optional)
+
+VEnv based python runtimes are needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
+
+1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check current pythonscripting environment configuration by calling 'pythonscripting info'.
+
+Important values are
+- `GraalVM version: 24.2.1` hereinafter referred to as `<graalversion>`
+- `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv` hereinafter referred to as `<myvenvpath>`
+
+2. Install 'patchelf' which is needed for native module support in graalpy (optional)
+```
+apt-get install patchelf
+# zypper install patchelf
+# yum install patchelf
+```
+
+3. Download graalpy and create venv inside `<myvenvpath>`
+```
+wget -qO- https://github.com/oracle/graalpython/releases/download/graal-<graalversion>/graalpy-community-<graalversion>-linux-amd64.tar.gz | gunzip | tar xvf -
+cd graalpy-community-<graalversion>-linux-amd64/
+
+./bin/graalpy -m venv <myvenvpath>
+```
+
+After these steps, venv setup is done and will be detected automatically during next openhab restart.
+
+::: tip Note
+The downloaded graalpy tar must match your operating system (linux, windows or macos). Additionally it must match your architecture too (amd64, aarch64).
+:::
+
 ## Creating Python Scripts
 
 When this add-on is installed, you can select Python 3 as a scripting language when creating a script action within the rule editor of the UI.

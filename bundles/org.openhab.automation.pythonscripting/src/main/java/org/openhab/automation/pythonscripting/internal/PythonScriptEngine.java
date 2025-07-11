@@ -17,12 +17,13 @@ import static org.openhab.core.automation.module.script.ScriptTransformationServ
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.AccessMode;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -53,10 +54,11 @@ import org.openhab.automation.pythonscripting.internal.fs.DelegatingFileSystem;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
 import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.scriptengine.InvocationInterceptingScriptEngineWithInvocableAndCompilableAndAutoCloseable;
+import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextInput;
+import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextOutput;
+import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextOutputLogger;
 import org.openhab.automation.pythonscripting.internal.scriptengine.helper.LifecycleTracker;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.LogOutputStream;
 import org.openhab.automation.pythonscripting.internal.wrapper.ScriptExtensionModuleProvider;
-import org.openhab.core.OpenHAB;
 import org.openhab.core.automation.module.script.ScriptExtensionAccessor;
 import org.openhab.core.items.Item;
 import org.slf4j.Logger;
@@ -74,6 +76,10 @@ public class PythonScriptEngine
         implements Lock {
     private final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
 
+    public static final String CONTEXT_KEY_ENGINE_LOGGER_OUTPUT = "ctx.engine-logger-output";
+    public static final String CONTEXT_KEY_ENGINE_LOGGER_INPUT = "ctx.engine-logger-input";
+    public static final String CONTEXT_KEY_SCRIPT_FILENAME = "javax.script.filename";
+
     private static final String SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION = "polyglotimpl.AttachLibraryFailureAction";
 
     private static final String PYTHON_OPTION_PYTHONPATH = "python.PythonPath";
@@ -84,10 +90,13 @@ public class PythonScriptEngine
     private static final String PYTHON_OPTION_CHECKHASHPYCSMODE = "python.CheckHashPycsMode";
     private static final String PYTHON_OPTION_ALWAYSRUNEXCEPTHOOK = "python.AlwaysRunExcepthook";
 
+    private static final String PYTHON_OPTION_EXECUTABLE = "python.Executable";
+    // private static final String PYTHON_OPTION_PYTHONHOME = "python.PythonHome";
+    // private static final String PYTHON_OPTION_SYSPREFIX = "python.SysPrefix";
+    private static final String PYTHON_OPTION_NATIVEMODULES = "python.NativeModules";
+    private static final String PYTHON_OPTION_ISOLATENATIVEMODULES = "python.IsolateNativeModules";
+
     private static final String PYTHON_OPTION_CACHEDIR = "python.PyCachePrefix";
-    private static final String PYTHON_CACHEDIR_PATH = Paths
-            .get(OpenHAB.getUserDataFolder(), "cache", PythonScriptEngine.class.getPackageName(), "cachedir")
-            .toString();
 
     private static final int STACK_TRACE_LENGTH = 5;
 
@@ -143,8 +152,9 @@ public class PythonScriptEngine
     private boolean initialized = false;
     private boolean closed = false;
 
-    private final LogOutputStream scriptOutputStream;
-    private final LogOutputStream scriptErrorStream;
+    private final ContextOutput scriptOutputStream;
+    private final ContextOutput scriptErrorStream;
+    private final ContextInput scriptInputStream;
 
     /**
      * Creates an implementation of ScriptEngine {@code (& Invocable)}, wrapping the contained engine,
@@ -154,8 +164,9 @@ public class PythonScriptEngine
             PythonScriptEngineConfiguration pythonScriptEngineConfiguration) {
         this.pythonScriptEngineConfiguration = pythonScriptEngineConfiguration;
 
-        scriptOutputStream = new LogOutputStream(logger, Level.INFO);
-        scriptErrorStream = new LogOutputStream(logger, Level.ERROR);
+        scriptOutputStream = new ContextOutput(new ContextOutputLogger(logger, Level.INFO));
+        scriptErrorStream = new ContextOutput(new ContextOutputLogger(logger, Level.ERROR));
+        scriptInputStream = new ContextInput(System.in);
 
         lifecycleTracker = new LifecycleTracker();
         scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
@@ -167,6 +178,7 @@ public class PythonScriptEngine
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .out(scriptOutputStream) //
                 .err(scriptErrorStream) //
+                .in(scriptInputStream) //
                 .allowIO(IOAccess.newBuilder() //
                         .allowHostSocketAccess(true) //
                         .fileSystem(new DelegatingFileSystem(FileSystems.getDefault().provider()) {
@@ -174,7 +186,7 @@ public class PythonScriptEngine
                             public void checkAccess(Path path, Set<? extends AccessMode> modes,
                                     LinkOption... linkOptions) throws IOException {
                                 if (pythonScriptEngineConfiguration.isDependencyTrackingEnabled()) {
-                                    if (path.startsWith(PythonScriptEngineFactory.PYTHON_LIB_PATH)) {
+                                    if (path.startsWith(PythonScriptEngineConfiguration.PYTHON_LIB_PATH)) {
                                         Consumer<String> localScriptDependencyListener = scriptDependencyListener;
                                         if (localScriptDependencyListener != null) {
                                             localScriptDependencyListener.accept(path.toString());
@@ -182,6 +194,17 @@ public class PythonScriptEngine
                                     }
                                 }
                                 super.checkAccess(path, modes, linkOptions);
+                            }
+
+                            @Override
+                            public Path getTempDirectory() {
+                                return pythonScriptEngineConfiguration.getTempDirectory();
+                            }
+
+                            @Override
+                            public void setAttribute(Path path, String attribute, Object value, LinkOption... options)
+                                    throws IOException {
+                                Files.setAttribute(path, attribute, value, options);
                             }
                         }).build()) //
                 .allowHostAccess(HOST_ACCESS) //
@@ -211,12 +234,25 @@ public class PythonScriptEngine
                         String.valueOf(pythonScriptEngineConfiguration.isJythonEmulation()))
 
                 // Set python path to point to sources stored in
-                .option(PYTHON_OPTION_PYTHONPATH, PythonScriptEngineFactory.PYTHON_LIB_PATH.toString()
-                        + File.pathSeparator + PythonScriptEngineFactory.PYTHON_DEFAULT_PATH.toString());
+                .option(PYTHON_OPTION_PYTHONPATH, PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString()
+                        + File.pathSeparator + PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH.toString());
+
+        if (this.pythonScriptEngineConfiguration.isVEnvEnabled()) {
+            Path venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable();
+            contextConfig = contextConfig.option(PYTHON_OPTION_EXECUTABLE, venvExecutable.toString());
+            // Path venvPath = this.pythonScriptEngineConfiguration.getVEnvDirectory();
+            // .option(PYTHON_OPTION_PYTHONHOME, venvPath.toString()) //
+            // .option(PYTHON_OPTION_SYSPREFIX, venvPath.toString()) //
+
+            if (this.pythonScriptEngineConfiguration.isNativeModulesEnabled()) {
+                contextConfig = contextConfig.option(PYTHON_OPTION_NATIVEMODULES, Boolean.toString(true)) //
+                        .option(PYTHON_OPTION_ISOLATENATIVEMODULES, Boolean.toString(true));
+            }
+        }
 
         if (pythonScriptEngineConfiguration.isCachingEnabled()) {
             contextConfig.option(PYTHON_OPTION_DONTWRITEBYTECODEFLAG, Boolean.toString(false)) //
-                    .option(PYTHON_OPTION_CACHEDIR, PYTHON_CACHEDIR_PATH);
+                    .option(PYTHON_OPTION_CACHEDIR, pythonScriptEngineConfiguration.getBytecodeDirectory().toString());
         } else {
             contextConfig.option(PYTHON_OPTION_DONTWRITEBYTECODEFLAG, Boolean.toString(true)) //
                     // causes the interpreter to always assume hash-based pycs are valid
@@ -241,57 +277,72 @@ public class PythonScriptEngine
 
         // these are added post-construction, so we need to fetch them late
         String engineIdentifier = (String) ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
-        if (engineIdentifier == null) {
-            throw new IllegalStateException("Failed to retrieve engine identifier from engine bindings");
-        }
+        if (engineIdentifier != null) {
+            ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
+                    .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
+            if (scriptExtensionAccessor == null) {
+                throw new IllegalStateException("Failed to retrieve script extension accessor from engine bindings");
+            }
 
-        ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
-                .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
-        if (scriptExtensionAccessor == null) {
-            throw new IllegalStateException("Failed to retrieve script extension accessor from engine bindings");
-        }
+            Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
+                    .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
+            if (scriptDependencyListener == null) {
+                logger.warn(
+                        "Failed to retrieve script script dependency listener from engine bindings. Script dependency tracking will be disabled.");
+            }
+            this.scriptDependencyListener = scriptDependencyListener;
 
-        Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
-                .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
-        if (scriptDependencyListener == null) {
-            logger.warn(
-                    "Failed to retrieve script script dependency listener from engine bindings. Script dependency tracking will be disabled.");
-        }
-        this.scriptDependencyListener = scriptDependencyListener;
+            if (pythonScriptEngineConfiguration.isScopeEnabled()) {
+                // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
+                BiFunction<String, List<String>, Object> wrapImportFn = (name,
+                        fromlist) -> scriptExtensionModuleProvider
+                                .locatorFor(delegate.getPolyglotContext(), engineIdentifier, scriptExtensionAccessor)
+                                .locateModule(name, fromlist);
+                delegate.getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME,
+                        wrapImportFn);
+                try {
+                    String wrapperContent = new String(
+                            Files.readAllBytes(PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH));
+                    delegate.getPolyglotContext()
+                            .eval(Source
+                                    .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, wrapperContent,
+                                            PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH.toString())
+                                    .build());
 
-        if (pythonScriptEngineConfiguration.isScopeEnabled()) {
-            // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
-            BiFunction<String, List<String>, Object> wrapImportFn = (name, fromlist) -> scriptExtensionModuleProvider
-                    .locatorFor(delegate.getPolyglotContext(), engineIdentifier, scriptExtensionAccessor)
-                    .locateModule(name, fromlist);
-            delegate.getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME,
-                    wrapImportFn);
-            try {
-                String wrapperContent = new String(
-                        Files.readAllBytes(PythonScriptEngineFactory.PYTHON_WRAPPER_FILE_PATH));
-                delegate.getPolyglotContext().eval(Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID,
-                        wrapperContent, PythonScriptEngineFactory.PYTHON_WRAPPER_FILE_PATH.toString()).build());
-
-                // inject scope, Registry and logger
-                if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
-                        && (ctx.getAttribute("javax.script.filename") == null || pythonScriptEngineConfiguration
-                                .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
-                    String injectionContent = "import scope\nfrom openhab import Registry, logger";
-                    delegate.getPolyglotContext().eval(Source
-                            .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>").build());
+                    // inject scope, Registry and logger
+                    if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
+                            && (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null || pythonScriptEngineConfiguration
+                                    .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
+                        String injectionContent = "import scope\nfrom openhab import Registry, logger";
+                        delegate.getPolyglotContext().eval(
+                                Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>")
+                                        .build());
+                    }
+                } catch (IOException e) {
+                    logger.error("Failed to inject import wrapper", e);
+                    throw new IllegalArgumentException("Failed to inject import wrapper", e);
                 }
-            } catch (IOException e) {
-                logger.error("Failed to inject import wrapper", e);
-                throw new IllegalArgumentException("Failed to inject import wrapper", e);
             }
         }
 
-        // logger initialization, for non file based scripts, has to be delayed, because ruleUID is not available yet
-        if (ctx.getAttribute("javax.script.filename") == null) {
-            Runnable wrapperLoggerFn = () -> setScriptLogger();
-            delegate.getBindings(ScriptContext.ENGINE_SCOPE).put(LOGGER_INIT_NAME, wrapperLoggerFn);
+        InputStream input = (InputStream) ctx.getAttribute(CONTEXT_KEY_ENGINE_LOGGER_INPUT);
+        if (input != null) {
+            scriptInputStream.setInputStream(input);
+        }
+
+        OutputStream output = (OutputStream) ctx.getAttribute(CONTEXT_KEY_ENGINE_LOGGER_OUTPUT);
+        if (output != null) {
+            scriptOutputStream.setOutputStream(output);
+            scriptErrorStream.setOutputStream(output);
         } else {
-            setScriptLogger();
+            // logger initialization, for non file based scripts, has to be delayed, because ruleUID is not
+            // available yet
+            if (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null) {
+                Runnable wrapperLoggerFn = () -> setScriptLogger();
+                delegate.getBindings(ScriptContext.ENGINE_SCOPE).put(LOGGER_INIT_NAME, wrapperLoggerFn);
+            } else {
+                setScriptLogger();
+            }
         }
 
         initialized = true;
@@ -325,13 +376,11 @@ public class PythonScriptEngine
         if (e instanceof ScriptException) {
             // PolyglotException will always be wrapped into ScriptException and they will be visualized in
             // org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl
-            if (scriptErrorStream.getLogger().isDebugEnabled()) {
-                scriptErrorStream.getLogger().debug("Failed to execute script (PolyglotException): {}",
-                        stringifyThrowable(e.getCause()));
+            if (logger.isDebugEnabled()) {
+                logger.debug("Failed to execute script (PolyglotException): {}", stringifyThrowable(e.getCause()));
             }
         } else if (e.getCause() instanceof IllegalArgumentException) {
-            scriptErrorStream.getLogger().error("Failed to execute script (IllegalArgumentException): {}",
-                    stringifyThrowable(e.getCause()));
+            logger.error("Failed to execute script (IllegalArgumentException): {}", stringifyThrowable(e.getCause()));
         }
 
         lock.unlock();
@@ -342,7 +391,7 @@ public class PythonScriptEngine
     @Override
     // collect JSR223 (scope) variables separately, because they are delivered via 'import scope'
     public void put(String key, Object value) {
-        if ("javax.script.filename".equals(key)) {
+        if (CONTEXT_KEY_SCRIPT_FILENAME.equals(key)) {
             super.put(key, value);
         } else {
             // use a custom lifecycleTracker to handle dispose hook before polyglot context is closed
@@ -422,6 +471,11 @@ public class PythonScriptEngine
         return lock.newCondition();
     }
 
+    @Override
+    public ScriptContext getContext() {
+        return getScriptContext();
+    }
+
     /**
      * Initializes the logger.
      * This cannot be done on script engine creation because the context variables are not yet initialized.
@@ -429,9 +483,9 @@ public class PythonScriptEngine
      */
     private void setScriptLogger() {
         ScriptContext ctx = getScriptContext();
-        Object fileName = ctx.getAttribute("javax.script.filename");
+        Object fileName = ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME);
         Object ruleUID = ctx.getAttribute("ruleUID");
-        Object ohEngineIdentifier = ctx.getAttribute("oh.engine-identifier");
+        Object ohEngineIdentifier = ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
 
         String identifier = "stack";
         if (fileName != null) {
@@ -446,8 +500,8 @@ public class PythonScriptEngine
 
         Logger scriptLogger = LoggerFactory.getLogger("org.openhab.automation.pythonscripting." + identifier);
 
-        scriptOutputStream.setLogger(scriptLogger);
-        scriptErrorStream.setLogger(scriptLogger);
+        scriptOutputStream.setOutputStream(new ContextOutputLogger(scriptLogger, Level.INFO));
+        scriptErrorStream.setOutputStream(new ContextOutputLogger(scriptLogger, Level.ERROR));
     }
 
     private ScriptContext getScriptContext() {

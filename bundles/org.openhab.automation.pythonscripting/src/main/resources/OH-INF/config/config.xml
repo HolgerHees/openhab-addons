@@ -46,6 +46,24 @@
 			</options>
 			<default>2</default>
 		</parameter>
+		<parameter name="pipModules" type="text" required="false" groupName="system">
+			<label>Python pip modules (requires a manually configured venv)</label>
+			<description>
+				<![CDATA[A comma separated list of Python modules to install.
+				Versions may be constrained by separating with an <code>==</code> followed by standard
+				python pip version constraint, such as "<code>tzdata==2025.2</code>".]]>
+			</description>
+			<default></default>
+			<advanced>true</advanced>
+		</parameter>
+		<parameter name="nativeModules" type="boolean" required="false" groupName="system">
+			<label>Enables support of native modules (requires a manually configured venv)</label>
+			<description>
+				<![CDATA[Native modules are sometimes necessary for pip modules which depends on native libraries.]]>
+			</description>
+			<default>false</default>
+			<advanced>true</advanced>
+		</parameter>
 		<parameter name="dependencyTrackingEnabled" type="boolean" required="true" groupName="system">
 			<label>Enable Dependency Tracking</label>
 			<description>Dependency tracking allows your scripts to automatically reload when one of its dependencies is updated.
