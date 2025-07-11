@@ -35,8 +35,12 @@ cd graalpy-community-<graalversion>-linux-amd64/
 
 After these steps, venv setup is done and will be detected automatically during next openhab restart.
 
-::: tip Note
-The downloaded graalpy tar must match your operating system (linux, windows or macos). Additionally it must match your architecture too (amd64, aarch64).
+::: tip Download note
+The downloaded graalpy tar must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and the graalvm version of openhab.
+:::
+
+::: tip VEnv note
+Theoretically you can also create venvs with a native python installation too. But it is strongly recommended to use graalpy for it. It will install a "special" version of pip in this venv, which will install patched python modules if available. This increases the compatibility of graalpython.
 :::
 
 ## Creating Python Scripts
