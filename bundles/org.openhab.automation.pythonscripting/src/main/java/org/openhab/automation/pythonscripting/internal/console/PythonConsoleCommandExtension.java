@@ -361,20 +361,19 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                             rootElement = getReleaseData(UPDATE_LATEST_URL, console);
                             if (rootElement != null) {
                                 releaseObj = rootElement.getAsJsonObject();//
+                                JsonElement tagName = releaseObj.get("tag_name");
+                                try {
+                                    releaseVersion = PythonScriptEngineConfiguration
+                                            .parseHelperLibVersion(tagName.getAsString());
+                                } catch (IllegalArgumentException e) {
+                                    console.println("Unable to parse version '" + tagName + "'. ");
+                                    throw new RuntimeException(e);
+                                }
                             }
                         } else {
                             try {
                                 Version requestedVersion = PythonScriptEngineConfiguration
                                         .parseHelperLibVersion(requestedVersionString);
-                                if (requestedVersion.equals(installedVersion)) {
-                                    console.println("Version '" + requestedVersion.toString() + "' already installed");
-                                    break;
-                                } else if (requestedVersion.compareTo(providedVersion) < 0) {
-                                    console.println(
-                                            "Outdated version '" + requestedVersion.toString() + "' not supported");
-                                    break;
-                                }
-
                                 rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
                                 if (rootElement != null) {
                                     if (rootElement.isJsonArray()) {
@@ -384,12 +383,12 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                                             try {
                                                 releaseVersion = PythonScriptEngineConfiguration
                                                         .parseHelperLibVersion(tagName.getAsString());
-                                                if (releaseVersion.compareTo(requestedVersion) == 0) {
-                                                    releaseObj = element.getAsJsonObject();
-                                                    break;
-                                                }
                                             } catch (IllegalArgumentException e) {
-                                                // ignore not parsable versions
+                                                continue;
+                                            }
+                                            if (releaseVersion.compareTo(requestedVersion) == 0) {
+                                                releaseObj = element.getAsJsonObject();
+                                                break;
                                             }
                                         }
                                     }
@@ -400,6 +399,14 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                         }
 
                         if (releaseObj != null && releaseVersion != null) {
+                            if (releaseVersion.equals(installedVersion)) {
+                                console.println("Version '" + releaseVersion.toString() + "' already installed");
+                                break;
+                            } else if (releaseVersion.compareTo(providedVersion) < 0) {
+                                console.println("Outdated version '" + releaseVersion.toString() + "' not supported");
+                                break;
+                            }
+
                             String zipballUrl = releaseObj.get("zipball_url").getAsString();
 
                             try {
