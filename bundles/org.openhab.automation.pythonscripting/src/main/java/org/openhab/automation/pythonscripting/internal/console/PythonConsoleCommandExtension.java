@@ -17,13 +17,19 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.module.ModuleDescriptor.Version;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Properties;
 import java.util.SortedSet;
 import java.util.UUID;
 
@@ -55,6 +61,11 @@ import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 /**
  * The {@link PythonConsoleCommandExtension} class
  *
@@ -65,13 +76,24 @@ import org.slf4j.LoggerFactory;
 public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtension implements ConsoleCommandCompleter {
     private final Logger logger = LoggerFactory.getLogger(PythonConsoleCommandExtension.class);
 
+    private static final String UPDATE_RELEASES_URL = "https://api.github.com/repos/openhab/openhab-python/releases";
+    private static final String UPDATE_LATEST_URL = "https://api.github.com/repos/openhab/openhab-python/releases/latest";
+
     private static final String INFO = "info";
     private static final String CONSOLE = "console";
     private static final String PIP = "pip";
+    private static final String PIP_INSTALL = "install";
+    private static final String PIP_UNINSTALL = "uninstall";
+    private static final String PIP_SHOW = "show";
+    private static final String PIP_LIST = "list";
+    private static final String UPDATE = "update";
+    private static final String UPDATE_LIST = "list";
+    private static final String UPDATE_CHECK = "check";
+    private static final String UPDATE_INSTALL = "install";
 
-    private static final List<String> SUB_COMMANDS = List.of(INFO, CONSOLE);
-
-    private static final List<String> PIP_SUB_COMMANDS = List.of("install", "uninstall", "show", "list");
+    private static final List<String> COMMANDS = List.of(INFO, CONSOLE, UPDATE);
+    private static final List<String> UPDATE_COMMANDS = List.of(UPDATE_LIST, UPDATE_CHECK, UPDATE_INSTALL);
+    private static final List<String> PIP_COMMANDS = List.of(PIP_INSTALL, PIP_UNINSTALL, PIP_SHOW, PIP_LIST);
 
     private final ScriptEngineManager scriptEngineManager;
     private final PythonScriptEngineFactory pythonScriptEngineFactory;
@@ -104,14 +126,19 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         ArrayList<String> usages = new ArrayList<String>();
         usages.add(buildCommandUsage(INFO, "displays information about Python Scripting add-on"));
         usages.add(buildCommandUsage(CONSOLE, "starts an interactive python console"));
+        usages.add(getUpdateUsage());
         if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
             usages.add(getPipUsage());
         }
         return usages;
     }
 
+    public String getUpdateUsage() {
+        return buildCommandUsage(UPDATE + " <" + String.join("|", UPDATE_COMMANDS) + ">", "update helper lib module");
+    }
+
     public String getPipUsage() {
-        return buildCommandUsage(PIP + " " + String.join("|", PIP_SUB_COMMANDS) + " <optional arguments>",
+        return buildCommandUsage(PIP + " <" + String.join("|", PIP_COMMANDS) + "> [optional pip specific arguments]",
                 "manages python modules");
     }
 
@@ -120,13 +147,15 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         StringsCompleter completer = new StringsCompleter();
         SortedSet<String> strings = completer.getStrings();
         if (cursorArgumentIndex == 0) {
-            strings.addAll(SUB_COMMANDS);
+            strings.addAll(COMMANDS);
             if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
                 strings.add(PIP);
             }
         } else if (cursorArgumentIndex == 1) {
             if (PIP.equals(args[0])) {
-                strings.addAll(PIP_SUB_COMMANDS);
+                strings.addAll(PIP_COMMANDS);
+            } else if (UPDATE.equals(args[0])) {
+                strings.addAll(UPDATE_COMMANDS);
             }
         }
 
@@ -152,19 +181,14 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 case CONSOLE:
                     startConsole(console, Arrays.copyOfRange(args, 1, args.length));
                     break;
-                case PIP:
-                    if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled() && args.length > 1) {
-                        if (PIP_SUB_COMMANDS.indexOf(args[1]) != -1) {
-                            pip(console, Arrays.copyOfRange(args, 1, args.length));
-                        } else {
-                            console.println("Unknown sub command '" + args[1] + "'");
-                            console.printUsage(getPipUsage());
-                        }
-                    } else {
-                        console.println("Missing sub_command");
-                        console.printUsage(getPipUsage());
-                    }
+                case UPDATE:
+                    executeUpdate(console, Arrays.copyOfRange(args, 1, args.length));
                     break;
+                case PIP:
+                    if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
+                        executePip(console, Arrays.copyOfRange(args, 1, args.length));
+                        break;
+                    }
                 default:
                     console.println("Unknown command '" + command + "'");
                     printUsage(console);
@@ -176,18 +200,10 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     }
 
     private void info(Console console) {
+        console.println("Python Scripting Environment:");
+        console.println("======================================");
         console.println("Runtime:");
-
-        Properties p = new Properties();
-        try {
-            InputStream is = PythonScriptEngineConfiguration.class.getResourceAsStream("/build.properties");
-            if (is != null) {
-                p.load(is);
-                console.println("  GraalVM version: " + p.getProperty("graalpy.version"));
-            }
-        } catch (IOException e) {
-        }
-
+        console.println("  GraalVM version: " + pythonScriptEngineFactory.getConfiguration().getGraalVersion());
         Engine tempEngine = Engine.newBuilder().useSystemProperties(false).//
                 out(OutputStream.nullOutputStream()).//
                 err(OutputStream.nullOutputStream()).//
@@ -195,11 +211,10 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 build();
         Language language = tempEngine.getLanguages().get("python");
         console.println("  Python version: " + language.getVersion());
-        Version version = pythonScriptEngineFactory.getConfiguration().getHelperLibVersion();
+        Version version = pythonScriptEngineFactory.getConfiguration().getInstalledHelperLibVersion();
         console.println("  Helper lib version: " + (version != null ? version.toString() : "disabled"));
         console.println("  VEnv state: "
                 + (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled() ? "enabled" : "disabled"));
-
         console.println("");
         console.println("Directories:");
         console.println("  Script path: " + scriptFileWatcher.getWatchPath());
@@ -209,7 +224,8 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         console.println("  VEnv path: " + venvDirectory.toString());
 
         console.println("");
-        console.println("Add-on configuration:");
+        console.println("Python Scripting Add-on Configuration:");
+        console.println("======================================");
         ConfigDescription configDescription = configDescriptionRegistry
                 .getConfigDescription(URI.create(PythonScriptEngineFactory.CONFIG_DESCRIPTION_URI));
 
@@ -267,25 +283,200 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         executePython(console, engine -> engine.eval(START_INTERACTIVE_SESSION), true);
     }
 
-    private void pip(Console console, String[] args) {
-        final String PIP = """
-                import subprocess
-                import sys
+    private void executeUpdate(Console console, String[] args) {
+        if (args.length == 0) {
+            console.println("Missing update action");
+            console.printUsage(getUpdateUsage());
+        } else if (UPDATE_COMMANDS.indexOf(args[0]) == -1) {
+            console.println("Unknown update action '" + args[0] + "'");
+            console.printUsage(getUpdateUsage());
+        } else {
+            JsonElement rootElement = null;
+            PythonScriptEngineConfiguration config = pythonScriptEngineFactory.getConfiguration();
+            Version installedVersion = config.getInstalledHelperLibVersion();
+            Version providedVersion = pythonScriptEngineFactory.getConfiguration().getProvidedHelperLibVersion();
+            switch (args[0]) {
+                case UPDATE_LIST:
+                    rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
+                    if (rootElement != null) {
+                        console.println("Version             Released            Active");
+                        console.println("----------------------------------------------");
+                        if (rootElement.isJsonArray()) {
+                            JsonArray list = rootElement.getAsJsonArray();
+                            for (JsonElement element : list.asList()) {
+                                String tagName = element.getAsJsonObject().get("tag_name").getAsString();
+                                String publishString = element.getAsJsonObject().get("published_at").getAsString();
 
-                cmd = ARGV.copy()
-                if cmd[0] == "uninstall":
-                    cmd.insert(1,"-y")
+                                boolean isInstalled = false;
+                                try {
+                                    Version availableVersion = PythonScriptEngineConfiguration
+                                            .parseHelperLibVersion(tagName);
+                                    if (availableVersion.equals(installedVersion)) {
+                                        isInstalled = true;
+                                    } else if (availableVersion.compareTo(providedVersion) < 0) {
+                                        continue;
+                                    }
 
-                command_list = [sys.executable, "-m", "pip"] + cmd
-                with subprocess.Popen(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as proc:
-                    for line in proc.stdout:
-                        print(line.rstrip())
-                """;
+                                    DateTimeFormatter df = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss",
+                                            Locale.getDefault());
+                                    OffsetDateTime publishDate = OffsetDateTime.parse(publishString);
+                                    console.println(String.format("%-19s", tagName) + " "
+                                            + String.format("%-19s", df.format(publishDate)) + " "
+                                            + String.format("%-6s", (isInstalled ? "*" : "  ")));
+                                } catch (IllegalArgumentException e) {
+                                    // ignore not parseable version
+                                }
+                            }
+                        } else {
+                            console.println("Fetching releases failed. Invalid data");
+                        }
+                    }
+                    break;
+                case UPDATE_CHECK:
+                    if (installedVersion == null) {
+                        console.println("Helper libs disabled. Skipping update.");
+                    } else {
+                        rootElement = getReleaseData(UPDATE_LATEST_URL, console);
+                        if (rootElement != null) {
+                            JsonElement tagName = rootElement.getAsJsonObject().get("tag_name");
+                            Version latestVersion = Version.parse(tagName.getAsString().substring(1));
+                            if (latestVersion.compareTo(installedVersion) > 0) {
+                                console.println("Update from version '" + installedVersion + "' to version '"
+                                        + latestVersion.toString() + "' available.");
+                            } else {
+                                console.println("Latest version '" + installedVersion + "' already installed.");
+                            }
+                        }
+                    }
+                    break;
+                case UPDATE_INSTALL:
+                    if (args.length <= 1) {
+                        console.println("Missing release name");
+                        console.printUsage("pythonscripting update install <\"latest\"|version>");
+                    } else {
+                        String requestedVersionString = args[1];
+                        JsonObject releaseObj = null;
+                        Version releaseVersion = null;
+                        if ("latest".equals(requestedVersionString)) {
+                            rootElement = getReleaseData(UPDATE_LATEST_URL, console);
+                            if (rootElement != null) {
+                                releaseObj = rootElement.getAsJsonObject();//
+                            }
+                        } else {
+                            try {
+                                Version requestedVersion = PythonScriptEngineConfiguration
+                                        .parseHelperLibVersion(requestedVersionString);
+                                if (requestedVersion.equals(installedVersion)) {
+                                    console.println("Version '" + requestedVersion.toString() + "' already installed");
+                                    break;
+                                } else if (requestedVersion.compareTo(providedVersion) < 0) {
+                                    console.println(
+                                            "Outdated version '" + requestedVersion.toString() + "' not supported");
+                                    break;
+                                }
 
-        executePython(console, engine -> {
-            engine.getContext().setAttribute("ARGV", args, ScriptContext.ENGINE_SCOPE);
-            return engine.eval(PIP);
-        }, false);
+                                rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
+                                if (rootElement != null) {
+                                    if (rootElement.isJsonArray()) {
+                                        JsonArray list = rootElement.getAsJsonArray();
+                                        for (JsonElement element : list.asList()) {
+                                            JsonElement tagName = element.getAsJsonObject().get("tag_name");
+                                            try {
+                                                releaseVersion = PythonScriptEngineConfiguration
+                                                        .parseHelperLibVersion(tagName.getAsString());
+                                                if (releaseVersion.compareTo(requestedVersion) == 0) {
+                                                    releaseObj = element.getAsJsonObject();
+                                                    break;
+                                                }
+                                            } catch (IllegalArgumentException e) {
+                                                // ignore not parsable versions
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (IllegalArgumentException e) {
+                                // continue, if no version was found
+                            }
+                        }
+
+                        if (releaseObj != null && releaseVersion != null) {
+                            String zipballUrl = releaseObj.get("zipball_url").getAsString();
+
+                            try {
+                                config.installHelperLib(zipballUrl, releaseVersion);
+                                console.println("Version '" + releaseVersion.toString() + "' installed successfully");
+                            } catch (Exception e) {
+                                console.println("Fetching release zip '" + zipballUrl + "' file failed. ");
+                                throw new RuntimeException(e);
+                            }
+                        } else {
+                            console.println("Version '" + requestedVersionString + "' not found. ");
+                        }
+                    }
+                    break;
+            }
+        }
+    }
+
+    private @Nullable JsonElement getReleaseData(String url, Console console) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
+                    .header("Accept", "application/vnd.github+json").GET().build();
+
+            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonElement obj = JsonParser.parseString(response.body());
+                return obj;
+            } else {
+                console.println("Fetching releases failed. Status code is " + response.statusCode());
+            }
+
+        } catch (IOException | InterruptedException e) {
+            console.println("Fetching releases failed. Request interrupted " + e.getLocalizedMessage());
+        }
+        return null;
+    }
+
+    private void executePip(Console console, String[] args) {
+        if (args.length == 0) {
+            console.println("Missing pip action");
+            console.printUsage(getPipUsage());
+        } else if (PIP_COMMANDS.indexOf(args[0]) == -1) {
+            console.println("Unknown pip action '" + args[1] + "'");
+            console.printUsage(getPipUsage());
+        } else {
+            ArrayList<String> params = new ArrayList<String>(Arrays.asList(args));
+
+            if (PIP_UNINSTALL.equals(args[0])) {
+                try {
+                    console.readLine("\nPress Enter to confirm uninstall or Ctrl+C to cancel.", null);
+                    console.println("");
+                    params.add(1, "-y");
+                } catch (IOException e) {
+                    console.println("Error: " + e.getMessage());
+                    return;
+                } catch (RuntimeException e) {
+                    console.println("Operation cancelled.");
+                    return;
+                }
+            }
+
+            final String PIP = """
+                    import subprocess
+                    import sys
+
+                    command_list = [sys.executable, "-m", "pip"] + PARAMS
+                    with subprocess.Popen(command_list, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as proc:
+                        for line in proc.stdout:
+                            print(line.rstrip())
+                    """;
+
+            executePython(console, engine -> {
+                engine.getContext().setAttribute("PARAMS", params, ScriptContext.ENGINE_SCOPE);
+                return engine.eval(PIP);
+            }, false);
+        }
     }
 
     private void printLoadingMessage(Console console, boolean show) {

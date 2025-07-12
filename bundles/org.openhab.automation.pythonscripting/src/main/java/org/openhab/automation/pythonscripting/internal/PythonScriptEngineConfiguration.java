@@ -12,11 +12,12 @@
  */
 package org.openhab.automation.pythonscripting.internal;
 
-import java.io.BufferedReader;
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.module.ModuleDescriptor.Version;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
@@ -32,7 +33,8 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
@@ -70,10 +72,13 @@ public class PythonScriptEngineConfiguration {
     public static final Path PYTHON_DEFAULT_PATH = Paths.get(OpenHAB.getConfigFolder(), "automation", "python");
     public static final Path PYTHON_LIB_PATH = PYTHON_DEFAULT_PATH.resolve("lib");
 
-    private static final Path PYTHON_OPENHAB_LIB_PATH = PYTHON_LIB_PATH.resolve("openhab");
+    public static final Path PYTHON_OPENHAB_LIB_PATH = PYTHON_LIB_PATH.resolve("openhab");
 
     public static final Path PYTHON_WRAPPER_FILE_PATH = PYTHON_OPENHAB_LIB_PATH.resolve("__wrapper__.py");
     private static final Path PYTHON_INIT_FILE_PATH = PYTHON_OPENHAB_LIB_PATH.resolve("__init__.py");
+
+    private static final Pattern VERSION_PATTERN = Pattern.compile("__version__\\s*=\\s*\"([^\"]*)\"",
+            Pattern.CASE_INSENSITIVE);
 
     public static final int INJECTION_DISABLED = 0;
     public static final int INJECTION_ENABLED_FOR_ALL_SCRIPTS = 1;
@@ -97,7 +102,14 @@ public class PythonScriptEngineConfiguration {
     private Path venvDirectory;
     private @Nullable Path venvExecutable = null;
 
-    private @Nullable Version helperLibVersion = null;
+    private Version graalVersion = Version.parse("0.0.0");
+    private Version providedHelperLibVersion = Version.parse("0.0.0");
+    private @Nullable Version installedHelperLibVersion = null;
+
+    public static Version parseHelperLibVersion(@Nullable String version) throws IllegalArgumentException {
+        // substring(1) => remove leading 'v'
+        return Version.parse(version.startsWith("v") ? version.substring(1) : version);
+    }
 
     @Activate
     public PythonScriptEngineConfiguration() {
@@ -108,6 +120,29 @@ public class PythonScriptEngineConfiguration {
             tempDirectory = Paths.get(tmpDir);
         } else {
             tempDirectory = userdataDir.resolve("tmp");
+        }
+
+        try {
+            InputStream is = PythonScriptEngineConfiguration.class
+                    .getResourceAsStream(RESOURCE_SEPARATOR + "build.properties");
+            if (is != null) {
+                Properties p = new Properties();
+                p.load(is);
+                String version = p.getProperty("helperlib.version");
+                try {
+                    providedHelperLibVersion = parseHelperLibVersion(version);
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Unable to parse helper lib version");
+                }
+                version = p.getProperty("graalpy.version");
+                try {
+                    graalVersion = Version.parse(version);
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Unable to parse graal version");
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to load build.properties");
         }
 
         String packageName = PythonScriptEngineConfiguration.class.getPackageName();
@@ -196,8 +231,16 @@ public class PythonScriptEngineConfiguration {
         return venvExecutable != null;
     }
 
-    public @Nullable Version getHelperLibVersion() {
-        return helperLibVersion;
+    public Version getGraalVersion() {
+        return graalVersion;
+    }
+
+    public Version getProvidedHelperLibVersion() {
+        return providedHelperLibVersion;
+    }
+
+    public @Nullable Version getInstalledHelperLibVersion() {
+        return installedHelperLibVersion;
     }
 
     /**
@@ -262,94 +305,157 @@ public class PythonScriptEngineConfiguration {
     }
 
     private void initHelperLib() {
-        logger.info("Checking for helper libs");
+        logger.info("Checking for helper libs version '{}'", providedHelperLibVersion);
+
+        String pathSeparator = FileSystems.getDefault().getSeparator();
+        String resourceLibPath = PYTHON_OPENHAB_LIB_PATH.toString().substring(PYTHON_DEFAULT_PATH.toString().length())
+                + pathSeparator;
+        if (!RESOURCE_SEPARATOR.equals(pathSeparator)) {
+            resourceLibPath = resourceLibPath.replace(pathSeparator, RESOURCE_SEPARATOR);
+        }
+
+        if (Files.exists(PYTHON_INIT_FILE_PATH)) {
+            try {
+                String content = Files.readString(PYTHON_INIT_FILE_PATH, StandardCharsets.UTF_8);
+                Matcher currentMatcher = VERSION_PATTERN.matcher(content);
+                if (currentMatcher.find()) {
+                    installedHelperLibVersion = Version.parse(currentMatcher.group(1));
+                    if (installedHelperLibVersion.compareTo(providedHelperLibVersion) >= 0) {
+                        // logger.info("Newest helper lib version is deployed.");
+                        return;
+                    }
+                } else {
+                    logger.warn("Unable to parse current version. Proceed as if it was not installed.");
+                }
+            } catch (IOException | IllegalArgumentException e) {
+                logger.warn("Unable to detect current version. Proceed as if it was not installed.");
+            }
+        }
+
+        if (installedHelperLibVersion != null) {
+            logger.info("Update helper libs version '{}' to version {}.", installedHelperLibVersion,
+                    providedHelperLibVersion);
+        } else {
+            logger.info("Install helper libs version {}.", providedHelperLibVersion);
+        }
 
         try {
-            String pathSeparator = FileSystems.getDefault().getSeparator();
-            String resourceLibPath = PYTHON_OPENHAB_LIB_PATH.toString()
-                    .substring(PYTHON_DEFAULT_PATH.toString().length()) + pathSeparator;
-            if (!RESOURCE_SEPARATOR.equals(pathSeparator)) {
-                resourceLibPath = resourceLibPath.replace(pathSeparator, RESOURCE_SEPARATOR);
-            }
+            Path bakLibPath = preProcessHelperLibUpdate();
 
-            if (Files.exists(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH)) {
-                try (Stream<Path> files = Files.list(PYTHON_OPENHAB_LIB_PATH)) {
-                    if (files.count() > 0) {
-                        Pattern pattern = Pattern.compile("__version__\\s*=\\s*\"([0-9]+\\.[0-9]+\\.[0-9]+)\"",
-                                Pattern.CASE_INSENSITIVE);
-                        Version includedVersion = null;
-                        try (InputStream is = PythonScriptEngineConfiguration.class.getClassLoader()
-                                .getResourceAsStream(
-                                        resourceLibPath + PYTHON_INIT_FILE_PATH.getFileName().toString())) {
-                            try (InputStreamReader isr = new InputStreamReader(is);
-                                    BufferedReader reader = new BufferedReader(isr)) {
-                                String fileContent = reader.lines().collect(Collectors.joining(System.lineSeparator()));
-                                Matcher includedMatcher = pattern.matcher(fileContent);
-                                if (includedMatcher.find()) {
-                                    includedVersion = Version.parse(includedMatcher.group(1));
-                                }
-                            }
-                        }
+            try {
+                Enumeration<URL> resourceFiles = FrameworkUtil.getBundle(PythonScriptEngineConfiguration.class)
+                        .findEntries(resourceLibPath, "*.py", true);
 
-                        Version currentVersion = null;
-                        String fileContent = Files.readString(PYTHON_INIT_FILE_PATH, StandardCharsets.UTF_8);
-                        Matcher currentMatcher = pattern.matcher(fileContent);
-                        if (currentMatcher.find()) {
-                            currentVersion = Version.parse(currentMatcher.group(1));
-                        }
+                while (resourceFiles.hasMoreElements()) {
+                    URL resourceFile = resourceFiles.nextElement();
+                    String resourcePath = resourceFile.getPath();
 
-                        helperLibVersion = currentVersion;
+                    try (InputStream is = PythonScriptEngineConfiguration.class.getClassLoader()
+                            .getResourceAsStream(resourcePath)) {
+                        Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
+                                .resolve(resourcePath.substring(resourcePath.lastIndexOf(RESOURCE_SEPARATOR) + 1));
 
-                        if (currentVersion == null) {
-                            logger.warn("Unable to detect installed helper lib version. Skip installing helper libs.");
-                            return;
-                        } else if (includedVersion == null) {
-                            logger.error("Unable to detect provided helper lib version. Skip installing helper libs.");
-                            return;
-                        } else if (currentVersion.compareTo(includedVersion) >= 0) {
-                            // logger.info("Newest helper lib version is deployed.");
-                            return;
-                        }
+                        Files.copy(is, target);
+                        initHelperLibFile(target);
                     }
                 }
-            }
 
-            logger.info("Deploy helper libs into {}.", PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
-
-            if (Files.exists(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH)) {
-                try (Stream<Path> paths = Files.walk(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH)) {
-                    paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-                }
-            }
-
-            initDirectory(PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH);
-            initDirectory(PythonScriptEngineConfiguration.PYTHON_LIB_PATH);
-            initDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
-
-            Enumeration<URL> resourceFiles = FrameworkUtil.getBundle(PythonScriptEngineConfiguration.class)
-                    .findEntries(resourceLibPath, "*.py", true);
-
-            while (resourceFiles.hasMoreElements()) {
-                URL resourceFile = resourceFiles.nextElement();
-                String resourcePath = resourceFile.getPath();
-
-                try (InputStream is = PythonScriptEngineConfiguration.class.getClassLoader()
-                        .getResourceAsStream(resourcePath)) {
-                    Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
-                            .resolve(resourcePath.substring(resourcePath.lastIndexOf(RESOURCE_SEPARATOR) + 1));
-
-                    Files.copy(is, target);
-                    File file = target.toFile();
-                    file.setReadable(true, false);
-                    file.setWritable(true, true);
-                }
+                postProcessHelperLibUpdate(providedHelperLibVersion, bakLibPath);
+            } catch (Exception e) {
+                postProcessHelperLibUpdate(null, bakLibPath);
+                throw e;
             }
         } catch (Exception e) {
             logger.error("Exception during helper lib initialisation", e);
         }
     }
 
-    private void initDirectory(Path path) {
+    public void installHelperLib(String remoteUrl, Version remoteVersion) throws Exception {
+        Path bakLibPath = preProcessHelperLibUpdate();
+
+        try {
+            URL zipfileUrl = new URI(remoteUrl).toURL();
+            InputStream in = new BufferedInputStream(zipfileUrl.openStream(), 1024);
+            ZipInputStream stream = new ZipInputStream(in);
+            byte[] buffer = new byte[1024];
+            ZipEntry entry;
+            while ((entry = stream.getNextEntry()) != null) {
+                if (!entry.getName().contains("/src/") || entry.isDirectory()) {
+                    continue;
+                }
+
+                int read;
+                StringBuilder sb = new StringBuilder();
+                while ((read = stream.read(buffer, 0, 1024)) >= 0) {
+                    sb.append(new String(buffer, 0, read));
+                }
+
+                Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
+                        .resolve(new File(entry.getName()).getName());
+                Files.write(target, sb.toString().getBytes());
+                initHelperLibFile(target);
+            }
+
+            postProcessHelperLibUpdate(remoteVersion, bakLibPath);
+        } catch (Exception e) {
+            postProcessHelperLibUpdate(null, bakLibPath);
+            throw e;
+        }
+    }
+
+    private @Nullable Path preProcessHelperLibUpdate() throws IOException {
+        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH);
+        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_LIB_PATH);
+
+        Path bakLibPath = backupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+
+        return bakLibPath;
+    }
+
+    private void postProcessHelperLibUpdate(@Nullable Version version, @Nullable Path bakLibPath) throws IOException {
+        if (version != null) {
+            String content = Files.readString(PYTHON_INIT_FILE_PATH, StandardCharsets.UTF_8).trim();
+            Matcher currentMatcher = VERSION_PATTERN.matcher(content);
+            content = currentMatcher.replaceAll("__version__ = \"" + version.toString() + "\"");
+            Files.writeString(PYTHON_INIT_FILE_PATH, content, StandardCharsets.UTF_8);
+            installedHelperLibVersion = version;
+
+            if (bakLibPath != null) {
+                // cleanup old files
+                cleanupHelperLibDirectory(bakLibPath);
+            }
+        } else if (bakLibPath != null) {
+            // restore old files
+            restoreHelperLibDirectory(bakLibPath, PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+        }
+    }
+
+    private void cleanupHelperLibDirectory(Path path) throws IOException {
+        try (var dirStream = Files.walk(path)) {
+            dirStream.map(Path::toFile).sorted(Comparator.reverseOrder()).forEach(File::delete);
+        }
+    }
+
+    private void restoreHelperLibDirectory(Path oldPath, Path newPath) throws IOException {
+        // cleanup new files
+        cleanupHelperLibDirectory(newPath);
+
+        // restore old files
+        Files.move(oldPath, newPath);
+    }
+
+    private @Nullable Path backupHelperLibDirectory(Path path) throws IOException {
+        if (!Files.exists(path)) {
+            return null;
+        }
+
+        Path newPath = path.getParent().resolve(path.getFileName() + ".bak");
+        Files.move(path, newPath);
+        return newPath;
+    }
+
+    private void initHelperLibDirectory(Path path) {
         File directory = path.toFile();
         if (!directory.exists()) {
             directory.mkdir();
@@ -357,6 +463,12 @@ public class PythonScriptEngineConfiguration {
             directory.setReadable(true, false);
             directory.setWritable(true, true);
         }
+    }
+
+    private void initHelperLibFile(Path path) {
+        File file = path.toFile();
+        file.setReadable(true, false);
+        file.setWritable(true, true);
     }
 
     /**
