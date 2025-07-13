@@ -415,23 +415,21 @@ public class PythonScriptEngineConfiguration {
 
         if (bakLibPath != null) {
             // cleanup old files
-            cleanupHelperLibDirectory(bakLibPath);
+            try (var dirStream = Files.walk(bakLibPath)) {
+                dirStream.map(Path::toFile).sorted(Comparator.reverseOrder()).forEach(File::delete);
+            }
         }
     }
 
     private void postProcessHelperLibUpdateOnFailure(@Nullable Path bakLibPath) throws IOException {
         // cleanup new files
-        cleanupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+        try (var dirStream = Files.walk(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH)) {
+            dirStream.map(Path::toFile).sorted(Comparator.reverseOrder()).forEach(File::delete);
+        }
 
         if (bakLibPath != null) {
             // restore old files
             Files.move(bakLibPath, PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
-        }
-    }
-
-    private void cleanupHelperLibDirectory(Path path) throws IOException {
-        try (var dirStream = Files.walk(path)) {
-            dirStream.map(Path::toFile).sorted(Comparator.reverseOrder()).forEach(File::delete);
         }
     }
 
