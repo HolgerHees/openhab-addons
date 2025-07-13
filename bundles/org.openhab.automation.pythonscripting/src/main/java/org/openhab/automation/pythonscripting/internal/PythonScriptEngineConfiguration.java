@@ -71,7 +71,6 @@ public class PythonScriptEngineConfiguration {
 
     public static final Path PYTHON_DEFAULT_PATH = Paths.get(OpenHAB.getConfigFolder(), "automation", "python");
     public static final Path PYTHON_LIB_PATH = PYTHON_DEFAULT_PATH.resolve("lib");
-
     public static final Path PYTHON_OPENHAB_LIB_PATH = PYTHON_LIB_PATH.resolve("openhab");
 
     public static final Path PYTHON_WRAPPER_FILE_PATH = PYTHON_OPENHAB_LIB_PATH.resolve("__wrapper__.py");
@@ -151,8 +150,8 @@ public class PythonScriptEngineConfiguration {
 
         Properties props = System.getProperties();
         props.setProperty(SYSTEM_PROPERTY_POLYGLOT_ENGINE_USERRESOURCECACHE, bindingDirectory.toString());
-        bytecodeDirectory = initDirectory(bindingDirectory, "resources");
-        venvDirectory = initDirectory(bindingDirectory, "venv");
+        bytecodeDirectory = initDirectory(bindingDirectory.resolve("resources"));
+        venvDirectory = initDirectory(bindingDirectory.resolve("venv"));
 
         Path venvPythonBin = venvDirectory.resolve("bin").resolve("graalpy");
         if (Files.exists(venvPythonBin)) {
@@ -260,14 +259,6 @@ public class PythonScriptEngineConfiguration {
         }));
     }
 
-    private Path initDirectory(Path base, String name) {
-        Path directory = base.resolve(name);
-        if (!Files.exists(directory)) {
-            directory.toFile().mkdirs();
-        }
-        return directory;
-    }
-
     private void initPipModules(ScriptEngineFactory factory) {
         String pipModulesConfig = configuration.pipModules.strip();
 
@@ -356,7 +347,7 @@ public class PythonScriptEngineConfiguration {
                                 .resolve(resourcePath.substring(resourcePath.lastIndexOf(RESOURCE_SEPARATOR) + 1));
 
                         Files.copy(is, target);
-                        initHelperLibFile(target);
+                        initFile(target);
                     }
                 }
 
@@ -393,7 +384,7 @@ public class PythonScriptEngineConfiguration {
                 Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
                         .resolve(new File(entry.getName()).getName());
                 Files.write(target, sb.toString().getBytes());
-                initHelperLibFile(target);
+                initFile(target);
             }
 
             postProcessHelperLibUpdate(remoteVersion, bakLibPath);
@@ -404,12 +395,8 @@ public class PythonScriptEngineConfiguration {
     }
 
     private @Nullable Path preProcessHelperLibUpdate() throws IOException {
-        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH);
-        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_LIB_PATH);
-
         Path bakLibPath = backupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
-        initHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
-
+        initDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
         return bakLibPath;
     }
 
@@ -455,20 +442,21 @@ public class PythonScriptEngineConfiguration {
         return newPath;
     }
 
-    private void initHelperLibDirectory(Path path) {
+    private void initFile(Path path) {
+        File file = path.toFile();
+        file.setReadable(true, false);
+        file.setWritable(true, true);
+    }
+
+    private Path initDirectory(Path path) {
         File directory = path.toFile();
         if (!directory.exists()) {
-            directory.mkdir();
+            directory.mkdirs();
             directory.setExecutable(true, false);
             directory.setReadable(true, false);
             directory.setWritable(true, true);
         }
-    }
-
-    private void initHelperLibFile(Path path) {
-        File file = path.toFile();
-        file.setReadable(true, false);
-        file.setWritable(true, true);
+        return path;
     }
 
     /**
