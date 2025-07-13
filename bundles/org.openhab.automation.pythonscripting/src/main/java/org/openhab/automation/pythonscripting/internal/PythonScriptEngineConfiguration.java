@@ -395,7 +395,13 @@ public class PythonScriptEngineConfiguration {
     }
 
     private @Nullable Path preProcessHelperLibUpdate() throws IOException {
-        Path bakLibPath = backupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+        Path bakLibPath = null;
+        // backup old lib folder before update
+        if (Files.exists(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH)) {
+            bakLibPath = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH.getParent()
+                    .resolve(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH.getFileName() + ".bak");
+            Files.move(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH, bakLibPath);
+        }
         initDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
         return bakLibPath;
     }
@@ -413,8 +419,11 @@ public class PythonScriptEngineConfiguration {
                 cleanupHelperLibDirectory(bakLibPath);
             }
         } else if (bakLibPath != null) {
+            // cleanup new files
+            cleanupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+
             // restore old files
-            restoreHelperLibDirectory(bakLibPath, PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+            Files.move(bakLibPath, PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
         }
     }
 
@@ -422,24 +431,6 @@ public class PythonScriptEngineConfiguration {
         try (var dirStream = Files.walk(path)) {
             dirStream.map(Path::toFile).sorted(Comparator.reverseOrder()).forEach(File::delete);
         }
-    }
-
-    private void restoreHelperLibDirectory(Path oldPath, Path newPath) throws IOException {
-        // cleanup new files
-        cleanupHelperLibDirectory(newPath);
-
-        // restore old files
-        Files.move(oldPath, newPath);
-    }
-
-    private @Nullable Path backupHelperLibDirectory(Path path) throws IOException {
-        if (!Files.exists(path)) {
-            return null;
-        }
-
-        Path newPath = path.getParent().resolve(path.getFileName() + ".bak");
-        Files.move(path, newPath);
-        return newPath;
     }
 
     private void initFile(Path path) {
