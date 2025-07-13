@@ -159,11 +159,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             }
         }
 
-        if (!strings.isEmpty()) {
-            return completer.complete(args, cursorArgumentIndex, cursorPosition, candidates);
-        }
-
-        return false;
+        return strings.isEmpty() ? false : completer.complete(args, cursorArgumentIndex, cursorPosition, candidates);
     }
 
     @Override
@@ -267,7 +263,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     }
 
     private void startConsole(Console console, String[] args) {
-        final String START_INTERACTIVE_SESSION = """
+        final String startInteractiveSessionCode = """
                 import readline # optional, will allow Up/Down/History in the console
                 import code
 
@@ -280,7 +276,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                     pass
                 """;
 
-        executePython(console, engine -> engine.eval(START_INTERACTIVE_SESSION), true);
+        executePython(console, engine -> engine.eval(startInteractiveSessionCode), true);
     }
 
     private void executeUpdate(Console console, String[] args) {
@@ -469,7 +465,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 }
             }
 
-            final String PIP = """
+            final String pipCode = """
                     import subprocess
                     import sys
 
@@ -481,7 +477,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
 
             executePython(console, engine -> {
                 engine.getContext().setAttribute("PARAMS", params, ScriptContext.ENGINE_SCOPE);
-                return engine.eval(PIP);
+                return engine.eval(pipCode);
             }, false);
         }
     }

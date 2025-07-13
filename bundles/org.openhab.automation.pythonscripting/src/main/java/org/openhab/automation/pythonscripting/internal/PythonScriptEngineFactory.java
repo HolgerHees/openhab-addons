@@ -48,11 +48,10 @@ import org.slf4j.LoggerFactory;
 public class PythonScriptEngineFactory implements ScriptEngineFactory {
     private final Logger logger = LoggerFactory.getLogger(PythonScriptEngineFactory.class);
 
-    public final static String CONFIG_DESCRIPTION_URI = "automation:pythonscripting";
-
+    public static final String CONFIG_DESCRIPTION_URI = "automation:pythonscripting";
     public static final String SCRIPT_TYPE = "application/x-python3";
-    private final List<String> scriptTypes = Arrays.asList("py", SCRIPT_TYPE);
 
+    private final List<String> scriptTypes = Arrays.asList("py", SCRIPT_TYPE);
     private final PythonDependencyTracker pythonDependencyTracker;
     private final PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 

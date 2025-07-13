@@ -273,7 +273,7 @@ public class PythonScriptEngineConfiguration {
             return;
         }
 
-        final String PIP = """
+        final String pipCode = """
                 import subprocess
                 import sys
 
@@ -288,7 +288,7 @@ public class PythonScriptEngineConfiguration {
         engine.getContext().setAttribute("pipModules", pipModules, ScriptContext.ENGINE_SCOPE);
         try {
             logger.info("Checking for pip module{} '{}'", pipModules.size() > 1 ? "s" : "", configuration.pipModules);
-            engine.eval(PIP);
+            engine.eval(pipCode);
         } catch (ScriptException e) {
             logger.warn("Error installing pip module{}", pipModules.size() > 1 ? "s" : "");
             logger.trace("TRACE:", unwrap(e));
