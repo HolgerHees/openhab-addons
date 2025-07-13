@@ -351,9 +351,9 @@ public class PythonScriptEngineConfiguration {
                     }
                 }
 
-                postProcessHelperLibUpdate(providedHelperLibVersion, bakLibPath);
+                postProcessHelperLibUpdateOnSuccess(providedHelperLibVersion, bakLibPath);
             } catch (Exception e) {
-                postProcessHelperLibUpdate(null, bakLibPath);
+                postProcessHelperLibUpdateOnFailure(bakLibPath);
                 throw e;
             }
         } catch (Exception e) {
@@ -387,9 +387,9 @@ public class PythonScriptEngineConfiguration {
                 initFile(target);
             }
 
-            postProcessHelperLibUpdate(remoteVersion, bakLibPath);
+            postProcessHelperLibUpdateOnSuccess(remoteVersion, bakLibPath);
         } catch (Exception e) {
-            postProcessHelperLibUpdate(null, bakLibPath);
+            postProcessHelperLibUpdateOnFailure(bakLibPath);
             throw e;
         }
     }
@@ -406,22 +406,24 @@ public class PythonScriptEngineConfiguration {
         return bakLibPath;
     }
 
-    private void postProcessHelperLibUpdate(@Nullable Version version, @Nullable Path bakLibPath) throws IOException {
-        if (version != null) {
-            String content = Files.readString(PYTHON_INIT_FILE_PATH, StandardCharsets.UTF_8).trim();
-            Matcher currentMatcher = VERSION_PATTERN.matcher(content);
-            content = currentMatcher.replaceAll("__version__ = \"" + version.toString() + "\"");
-            Files.writeString(PYTHON_INIT_FILE_PATH, content, StandardCharsets.UTF_8);
-            installedHelperLibVersion = version;
+    private void postProcessHelperLibUpdateOnSuccess(Version version, @Nullable Path bakLibPath) throws IOException {
+        String content = Files.readString(PYTHON_INIT_FILE_PATH, StandardCharsets.UTF_8).trim();
+        Matcher currentMatcher = VERSION_PATTERN.matcher(content);
+        content = currentMatcher.replaceAll("__version__ = \"" + version.toString() + "\"");
+        Files.writeString(PYTHON_INIT_FILE_PATH, content, StandardCharsets.UTF_8);
+        installedHelperLibVersion = version;
 
-            if (bakLibPath != null) {
-                // cleanup old files
-                cleanupHelperLibDirectory(bakLibPath);
-            }
-        } else if (bakLibPath != null) {
-            // cleanup new files
-            cleanupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+        if (bakLibPath != null) {
+            // cleanup old files
+            cleanupHelperLibDirectory(bakLibPath);
+        }
+    }
 
+    private void postProcessHelperLibUpdateOnFailure(@Nullable Path bakLibPath) throws IOException {
+        // cleanup new files
+        cleanupHelperLibDirectory(PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
+
+        if (bakLibPath != null) {
             // restore old files
             Files.move(bakLibPath, PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH);
         }
