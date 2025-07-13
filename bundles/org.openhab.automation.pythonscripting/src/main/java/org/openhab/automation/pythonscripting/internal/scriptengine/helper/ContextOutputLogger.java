@@ -19,38 +19,30 @@ import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
 /**
- * LogOutputStream implementation
+ * ContextLogOutputStream implementation
  *
  * @author Holger Hees - Initial contribution
  */
 @NonNullByDefault
-public class LogOutputStream extends OutputStream {
+public class ContextOutputLogger extends OutputStream {
     private static final int DEFAULT_BUFFER_LENGTH = 2048;
     private static final String LINE_SEPARATOR = System.lineSeparator();
     private static final int LINE_SEPARATOR_SIZE = LINE_SEPARATOR.length();
-
-    private Logger logger;
-    private Level level;
 
     private int bufLength;
     private byte[] buf;
     private int count;
 
-    public LogOutputStream(Logger logger, Level level) {
+    private Logger logger;
+    private Level level;
+
+    public ContextOutputLogger(Logger logger, Level level) {
         this.logger = logger;
         this.level = level;
 
         bufLength = DEFAULT_BUFFER_LENGTH;
         buf = new byte[DEFAULT_BUFFER_LENGTH];
         count = 0;
-    }
-
-    public void setLogger(Logger logger) {
-        this.logger = logger;
-    }
-
-    public Logger getLogger() {
-        return logger;
     }
 
     @Override

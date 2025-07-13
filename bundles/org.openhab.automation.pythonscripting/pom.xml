@@ -16,10 +16,27 @@
 
   <properties>
     <graalpy.version>24.2.0</graalpy.version>
+    <helperlib.version>v1.0.0-rc3</helperlib.version>
   </properties>
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>properties-maven-plugin</artifactId>
+        <version>1.0.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>write-project-properties</goal>
+            </goals>
+            <phase>generate-resources</phase>
+            <configuration>
+              <outputFile>${project.build.outputDirectory}/build.properties</outputFile>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
@@ -58,7 +75,7 @@
             <configuration>
               <connectionUrl>scm:git:https://github.com/openhab/openhab-python</connectionUrl>
               <checkoutDirectory>${project.build.directory}/python</checkoutDirectory>
-              <scmVersion>v1.0.0-rc3</scmVersion>
+              <scmVersion>${helperlib.version}</scmVersion>
               <scmVersionType>tag</scmVersionType>
             </configuration>
           </execution>
