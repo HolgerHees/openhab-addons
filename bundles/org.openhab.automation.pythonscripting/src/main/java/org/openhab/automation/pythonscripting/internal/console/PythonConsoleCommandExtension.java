@@ -410,7 +410,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                             String zipballUrl = releaseObj.get("zipball_url").getAsString();
 
                             try {
-                                config.installHelperLib(zipballUrl, releaseVersion);
+                                config.initHelperLib(zipballUrl, releaseVersion);
                                 console.println("Version '" + releaseVersion.toString() + "' installed successfully");
                             } catch (Exception e) {
                                 console.println("Fetching release zip '" + zipballUrl + "' file failed. ");

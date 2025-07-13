@@ -361,7 +361,7 @@ public class PythonScriptEngineConfiguration {
         }
     }
 
-    public void installHelperLib(String remoteUrl, Version remoteVersion) throws Exception {
+    public void initHelperLib(String remoteUrl, Version remoteVersion) throws Exception {
         Path bakLibPath = preProcessHelperLibUpdate();
 
         try {
