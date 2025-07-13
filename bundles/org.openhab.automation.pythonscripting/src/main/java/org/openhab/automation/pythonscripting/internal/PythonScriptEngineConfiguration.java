@@ -162,13 +162,9 @@ public class PythonScriptEngineConfiguration {
 
         configuration = new Configuration(config).as(PythonScriptingConfiguration.class);
 
-        if (isHelperEnabled()) {
-            initHelperLib();
-        }
+        initHelperLib();
 
-        if (isVEnvEnabled()) {
-            initPipModules(factory);
-        }
+        initPipModules(factory);
     }
 
     public boolean isScopeEnabled() {
@@ -254,8 +250,12 @@ public class PythonScriptEngineConfiguration {
 
     private void initPipModules(ScriptEngineFactory factory) {
         String pipModulesConfig = configuration.pipModules.strip();
-
         if (pipModulesConfig.isEmpty()) {
+            return;
+        }
+
+        if (!isVEnvEnabled()) {
+            logger.error("Can't installing pip modules. VEnv not enabled.");
             return;
         }
 
@@ -289,6 +289,10 @@ public class PythonScriptEngineConfiguration {
     }
 
     private void initHelperLib() {
+        if (!isHelperEnabled()) {
+            return;
+        }
+
         logger.info("Checking for helper libs version '{}'", providedHelperLibVersion);
 
         String pathSeparator = FileSystems.getDefault().getSeparator();
