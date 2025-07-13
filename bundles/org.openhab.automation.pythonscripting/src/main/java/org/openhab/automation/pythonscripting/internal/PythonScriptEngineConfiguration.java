@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.module.ModuleDescriptor.Version;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
@@ -128,20 +129,12 @@ public class PythonScriptEngineConfiguration {
                 Properties p = new Properties();
                 p.load(is);
                 String version = p.getProperty("helperlib.version");
-                try {
-                    providedHelperLibVersion = parseHelperLibVersion(version);
-                } catch (IllegalArgumentException e) {
-                    throw new RuntimeException("Unable to parse helper lib version");
-                }
+                providedHelperLibVersion = parseHelperLibVersion(version);
                 version = p.getProperty("graalpy.version");
-                try {
-                    graalVersion = Version.parse(version);
-                } catch (IllegalArgumentException e) {
-                    throw new RuntimeException("Unable to parse graal version");
-                }
+                graalVersion = Version.parse(version);
             }
         } catch (IOException e) {
-            throw new RuntimeException("Unable to load build.properties");
+            throw new IllegalArgumentException("Unable to load build.properties");
         }
 
         String packageName = PythonScriptEngineConfiguration.class.getPackageName();
@@ -361,10 +354,10 @@ public class PythonScriptEngineConfiguration {
         }
     }
 
-    public void initHelperLib(String remoteUrl, Version remoteVersion) throws Exception {
-        Path bakLibPath = preProcessHelperLibUpdate();
-
+    public void initHelperLib(String remoteUrl, Version remoteVersion) throws URISyntaxException, IOException {
+        Path bakLibPath = null;
         try {
+            bakLibPath = preProcessHelperLibUpdate();
             URL zipfileUrl = new URI(remoteUrl).toURL();
             InputStream in = new BufferedInputStream(zipfileUrl.openStream(), 1024);
             ZipInputStream stream = new ZipInputStream(in);
@@ -388,7 +381,7 @@ public class PythonScriptEngineConfiguration {
             }
 
             postProcessHelperLibUpdateOnSuccess(remoteVersion, bakLibPath);
-        } catch (Exception e) {
+        } catch (IOException | URISyntaxException e) {
             postProcessHelperLibUpdateOnFailure(bakLibPath);
             throw e;
         }

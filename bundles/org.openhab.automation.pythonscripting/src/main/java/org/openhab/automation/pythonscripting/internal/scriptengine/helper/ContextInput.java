@@ -41,6 +41,9 @@ public class ContextInput extends InputStream {
 
     @Override
     public int read() throws IOException {
+        if (stream == null) {
+            return -1;
+        }
         return stream.read();
     }
 }

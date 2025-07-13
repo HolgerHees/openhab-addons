@@ -15,11 +15,14 @@ package org.openhab.automation.pythonscripting.internal.scriptengine.helper;
 import java.io.IOException;
 import java.io.OutputStream;
 
+import org.eclipse.jdt.annotation.NonNullByDefault;
+
 /**
  * ContextOutput implementation
  *
  * @author Holger Hees - Initial contribution
  */
+@NonNullByDefault
 public class ContextOutput extends OutputStream {
     private OutputStream stream;
 
@@ -33,25 +36,16 @@ public class ContextOutput extends OutputStream {
 
     @Override
     public void close() throws IOException {
-        if (stream == null) {
-            return;
-        }
         stream.close();
     }
 
     @Override
     public void flush() throws IOException {
-        if (stream == null) {
-            return;
-        }
         stream.flush();
     }
 
     @Override
     public void write(int b) throws IOException {
-        if (stream == null) {
-            return;
-        }
         stream.write(b);
     }
 }

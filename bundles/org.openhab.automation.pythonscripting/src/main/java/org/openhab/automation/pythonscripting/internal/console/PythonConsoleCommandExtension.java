@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.module.ModuleDescriptor.Version;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -358,13 +359,8 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                             if (rootElement != null) {
                                 releaseObj = rootElement.getAsJsonObject();//
                                 JsonElement tagName = releaseObj.get("tag_name");
-                                try {
-                                    releaseVersion = PythonScriptEngineConfiguration
-                                            .parseHelperLibVersion(tagName.getAsString());
-                                } catch (IllegalArgumentException e) {
-                                    console.println("Unable to parse version '" + tagName + "'. ");
-                                    throw new RuntimeException(e);
-                                }
+                                releaseVersion = PythonScriptEngineConfiguration
+                                        .parseHelperLibVersion(tagName.getAsString());
                             }
                         } else {
                             try {
@@ -408,9 +404,9 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                             try {
                                 config.initHelperLib(zipballUrl, releaseVersion);
                                 console.println("Version '" + releaseVersion.toString() + "' installed successfully");
-                            } catch (Exception e) {
+                            } catch (URISyntaxException | IOException e) {
                                 console.println("Fetching release zip '" + zipballUrl + "' file failed. ");
-                                throw new RuntimeException(e);
+                                throw new IllegalArgumentException(e);
                             }
                         } else {
                             console.println("Version '" + requestedVersionString + "' not found. ");
