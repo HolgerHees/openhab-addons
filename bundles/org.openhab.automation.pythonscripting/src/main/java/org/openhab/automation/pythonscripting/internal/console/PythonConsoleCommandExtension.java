@@ -100,6 +100,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     private final PythonScriptEngineFactory pythonScriptEngineFactory;
     private final PythonScriptFileWatcher scriptFileWatcher;
     private final ConfigDescriptionRegistry configDescriptionRegistry;
+    private final PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 
     private final String scriptType;
 
@@ -112,6 +113,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         super("pythonscripting", "Python Scripting console utilities.");
         this.scriptEngineManager = scriptEngineManager;
         this.pythonScriptEngineFactory = pythonScriptEngineFactory;
+        this.pythonScriptEngineConfiguration = pythonScriptEngineFactory.getConfiguration();
         this.scriptFileWatcher = scriptFileWatcher;
         this.scriptType = PythonScriptEngineFactory.SCRIPT_TYPE;
         this.configDescriptionRegistry = configDescriptionRegistry;
@@ -128,7 +130,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         usages.add(buildCommandUsage(INFO, "displays information about Python Scripting add-on"));
         usages.add(buildCommandUsage(CONSOLE, "starts an interactive python console"));
         usages.add(getUpdateUsage());
-        if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
+        if (pythonScriptEngineConfiguration.isVEnvEnabled()) {
             usages.add(getPipUsage());
         }
         return usages;
@@ -149,7 +151,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         SortedSet<String> strings = completer.getStrings();
         if (cursorArgumentIndex == 0) {
             strings.addAll(COMMANDS);
-            if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
+            if (pythonScriptEngineConfiguration.isVEnvEnabled()) {
                 strings.add(PIP);
             }
         } else if (cursorArgumentIndex == 1) {
@@ -182,7 +184,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                     executeUpdate(console, Arrays.copyOfRange(args, 1, args.length));
                     break;
                 case PIP:
-                    if (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled()) {
+                    if (pythonScriptEngineConfiguration.isVEnvEnabled()) {
                         executePip(console, Arrays.copyOfRange(args, 1, args.length));
                         break;
                     }
@@ -200,7 +202,8 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         console.println("Python Scripting Environment:");
         console.println("======================================");
         console.println("Runtime:");
-        console.println("  GraalVM version: " + pythonScriptEngineFactory.getConfiguration().getGraalVersion());
+        console.println("  Bundle version: " + pythonScriptEngineConfiguration.getBundleVersion());
+        console.println("  GraalVM version: " + pythonScriptEngineConfiguration.getGraalVersion());
         Engine tempEngine = Engine.newBuilder().useSystemProperties(false).//
                 out(OutputStream.nullOutputStream()).//
                 err(OutputStream.nullOutputStream()).//
@@ -208,16 +211,15 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 build();
         Language language = tempEngine.getLanguages().get("python");
         console.println("  Python version: " + language.getVersion());
-        Version version = pythonScriptEngineFactory.getConfiguration().getInstalledHelperLibVersion();
+        Version version = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
         console.println("  Helper lib version: " + (version != null ? version.toString() : "disabled"));
-        console.println("  VEnv state: "
-                + (pythonScriptEngineFactory.getConfiguration().isVEnvEnabled() ? "enabled" : "disabled"));
+        console.println("  VEnv state: " + (pythonScriptEngineConfiguration.isVEnvEnabled() ? "enabled" : "disabled"));
         console.println("");
         console.println("Directories:");
         console.println("  Script path: " + scriptFileWatcher.getWatchPath());
-        Path tempDirectory = pythonScriptEngineFactory.getConfiguration().getTempDirectory();
+        Path tempDirectory = pythonScriptEngineConfiguration.getTempDirectory();
         console.println("  Temp path: " + tempDirectory.toString());
-        Path venvDirectory = pythonScriptEngineFactory.getConfiguration().getVEnvDirectory();
+        Path venvDirectory = pythonScriptEngineConfiguration.getVEnvDirectory();
         console.println("  VEnv path: " + venvDirectory.toString());
 
         console.println("");
@@ -232,7 +234,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         }
 
         List<ConfigDescriptionParameter> parameters = configDescription.getParameters();
-        Map<String, String> config = pythonScriptEngineFactory.getConfiguration().getConfigurations();
+        Map<String, String> config = pythonScriptEngineConfiguration.getConfigurations();
         configDescription.getParameters().forEach(parameter -> {
             if (parameter.getGroupName() == null) {
                 console.println("  " + parameter.getName() + ": " + config.get(parameter.getName()));
@@ -289,9 +291,8 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             console.printUsage(getUpdateUsage());
         } else {
             JsonElement rootElement = null;
-            PythonScriptEngineConfiguration config = pythonScriptEngineFactory.getConfiguration();
-            Version installedVersion = config.getInstalledHelperLibVersion();
-            Version providedVersion = pythonScriptEngineFactory.getConfiguration().getProvidedHelperLibVersion();
+            Version installedVersion = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
+            Version providedVersion = pythonScriptEngineConfiguration.getProvidedHelperLibVersion();
             switch (args[0]) {
                 case UPDATE_LIST:
                     rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
@@ -402,7 +403,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                             String zipballUrl = releaseObj.get("zipball_url").getAsString();
 
                             try {
-                                config.initHelperLib(zipballUrl, releaseVersion);
+                                pythonScriptEngineConfiguration.initHelperLib(zipballUrl, releaseVersion);
                                 console.println("Version '" + releaseVersion.toString() + "' installed successfully");
                             } catch (URISyntaxException | IOException e) {
                                 console.println("Fetching release zip '" + zipballUrl + "' file failed. ");

@@ -102,6 +102,9 @@ public class PythonScriptEngineConfiguration {
     private Path venvDirectory;
     private @Nullable Path venvExecutable = null;
 
+    private Version bundleVersion = Version
+            .parse(FrameworkUtil.getBundle(PythonScriptEngineConfiguration.class).getVersion().toString());
+
     private Version graalVersion = Version.parse("0.0.0");
     private Version providedHelperLibVersion = Version.parse("0.0.0");
     private @Nullable Version installedHelperLibVersion = null;
@@ -217,6 +220,10 @@ public class PythonScriptEngineConfiguration {
 
     public boolean isVEnvEnabled() {
         return venvExecutable != null;
+    }
+
+    public Version getBundleVersion() {
+        return bundleVersion;
     }
 
     public Version getGraalVersion() {
