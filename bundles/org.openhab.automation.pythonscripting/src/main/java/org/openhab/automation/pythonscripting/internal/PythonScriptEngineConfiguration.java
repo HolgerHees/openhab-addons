@@ -315,8 +315,11 @@ public class PythonScriptEngineConfiguration {
                 Matcher currentMatcher = VERSION_PATTERN.matcher(content);
                 if (currentMatcher.find()) {
                     installedHelperLibVersion = Version.parse(currentMatcher.group(1));
-                    if (installedHelperLibVersion.compareTo(providedHelperLibVersion) >= 0) {
-                        // logger.info("Newest helper lib version is deployed.");
+                    int compareResult = installedHelperLibVersion.compareTo(providedHelperLibVersion);
+                    if (compareResult >= 0) {
+                        if (compareResult > 0) {
+                            logger.info("Newer helper libs version '{}' already installed.", installedHelperLibVersion);
+                        }
                         return;
                     }
                 } else {

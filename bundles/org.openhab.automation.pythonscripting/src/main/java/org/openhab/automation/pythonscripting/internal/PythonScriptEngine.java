@@ -26,6 +26,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -109,18 +110,19 @@ public class PythonScriptEngine
 
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
-            // Translate python datetime with timezone to java.time.ZonedDateTime
             .targetTypeMapping(Value.class, ZonedDateTime.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo")
-                            && !v.getMember("tzinfo").isNull(),
-                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()),
+                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
+                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
+                            + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : "")),
                     HostAccess.TargetMappingPrecedence.LOW)
 
-            // Translate python datetime without timezone to java.time.Instant
+            // Translate python datetime java.time.Instant
             .targetTypeMapping(Value.class, Instant.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo")
-                            && v.getMember("tzinfo").isNull(),
-                    v -> Instant.parse(v.invokeMember("isoformat").asString() + "Z"),
+                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
+                    v -> ZonedDateTime
+                            .parse(v.invokeMember("isoformat").asString()
+                                    + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : ""))
+                            .toInstant(),
                     HostAccess.TargetMappingPrecedence.LOW)
 
             // Translate python timedelta to java.time.Duration
