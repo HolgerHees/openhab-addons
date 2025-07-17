@@ -32,7 +32,6 @@ import javax.script.ScriptException;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Context.Builder;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
@@ -53,45 +52,37 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     public static final String LANGUAGE_ID = "python";
     private static final String POLYGLOT_CONTEXT = "polyglot.context";
 
-    private static final String PYTHON_OPTION_POSIXMODULEBACKEND = "python.PosixModuleBackend";
-    private static final String PYTHON_OPTION_DONTWRITEBYTECODEFLAG = "python.DontWriteBytecodeFlag";
-    private static final String PYTHON_OPTION_FORCEIMPORTSITE = "python.ForceImportSite";
-    private static final String PYTHON_OPTION_CHECKHASHPYCSMODE = "python.CheckHashPycsMode";
-
     private final Logger logger = LoggerFactory.getLogger(GraalPythonScriptEngine.class);
 
     private final GraalPythonScriptEngineFactory factory;
     private final Context.Builder contextConfig;
 
+    /**
+     * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
+     * for new polyglot {@link Context} instances. Polyglot context instances can be accessed from
+     * {@link ScriptContext} instances using {@link #getPolyglotContext()}. The
+     * {@link Builder#out(OutputStream) out},{@link Builder#err(OutputStream) err} and
+     * {@link Builder#in(InputStream) in} stream configuration are not inherited from the provided
+     * polyglot context config. Instead {@link ScriptContext} output and input streams are used.
+     *
+     * @param engine the engine to be used for context configurations or <code>null</code> if a
+     *            default engine should be used.
+     * @param newContextConfig a base configuration to create new context instances or
+     *            <code>null</code> if the default configuration should be used to construct new
+     *            context instances.
+     */
+    public static GraalPythonScriptEngine create(Engine engine, Context.Builder contextConfig) {
+        return new GraalPythonScriptEngine(new GraalPythonScriptEngineFactory(engine, contextConfig), engine,
+                contextConfig);
+    }
+
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory) {
-        this(factory, factory.getPolyglotEngine(), null);
+        this(factory, factory.getPolyglotEngine(), factory.getContextConfig());
     }
 
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
-        Engine engineToUse = (engine != null) ? engine : factory.getPolyglotEngine();
-
-        Context.Builder contextConfigToUse = contextConfig;
-        if (contextConfigToUse == null) {
-            contextConfigToUse = Context.newBuilder(LANGUAGE_ID) //
-                    .allowExperimentalOptions(true) //
-                    .allowAllAccess(true) //
-                    .allowHostAccess(HostAccess.ALL) //
-                    // allow creating python threads
-                    .allowCreateThread(true) //
-                    // allow running Python native extensions
-                    .allowNativeAccess(true) //
-                    // allow exporting Python values to polyglot bindings and accessing Java
-                    // choose the backend for the POSIX module
-                    .option(PYTHON_OPTION_POSIXMODULEBACKEND, "java") //
-                    // equivalent to the Python -B flag
-                    .option(PYTHON_OPTION_DONTWRITEBYTECODEFLAG, "true") //
-                    // Force to automatically import site.py module, to make Python packages available
-                    .option(PYTHON_OPTION_FORCEIMPORTSITE, "true") //
-                    // causes the interpreter to always assume hash-based pycs are valid
-                    .option(PYTHON_OPTION_CHECKHASHPYCSMODE, "never");
-        }
-        this.factory = (factory == null) ? new GraalPythonScriptEngineFactory(engineToUse) : factory;
-        this.contextConfig = contextConfigToUse.engine(engineToUse);
+        this.factory = factory;
+        this.contextConfig = contextConfig.engine(engine);
         this.context.setBindings(new GraalPythonBindings(this.contextConfig, this.context, this),
                 ScriptContext.ENGINE_SCOPE);
     }
@@ -374,24 +365,6 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         } catch (PolyglotException pex) {
             throw toScriptException(pex);
         }
-    }
-
-    /**
-     * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
-     * for new polyglot {@link Context} instances. Polyglot context instances can be accessed from
-     * {@link ScriptContext} instances using {@link #getPolyglotContext()}. The
-     * {@link Builder#out(OutputStream) out},{@link Builder#err(OutputStream) err} and
-     * {@link Builder#in(InputStream) in} stream configuration are not inherited from the provided
-     * polyglot context config. Instead {@link ScriptContext} output and input streams are used.
-     *
-     * @param engine the engine to be used for context configurations or <code>null</code> if a
-     *            default engine should be used.
-     * @param newContextConfig a base configuration to create new context instances or
-     *            <code>null</code> if the default configuration should be used to construct new
-     *            context instances.
-     */
-    public static GraalPythonScriptEngine create(Engine engine, Context.Builder newContextConfig) {
-        return new GraalPythonScriptEngine(null, engine, newContextConfig);
     }
 
     private static boolean isInterfaceImplemented(final Class<?> iface, final Value obj) {

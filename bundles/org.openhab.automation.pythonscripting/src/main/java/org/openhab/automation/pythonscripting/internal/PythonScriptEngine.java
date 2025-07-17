@@ -31,7 +31,6 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -82,7 +81,8 @@ public class PythonScriptEngine
     public static final String CONTEXT_KEY_SCRIPT_FILENAME = "javax.script.filename";
 
     private static final String SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION = "polyglotimpl.AttachLibraryFailureAction";
-    private static final String SYSTEM_PROPERTY_POLYGLOT_ENGINE_WARNINTERPRETERONLY = "polyglot.engine.WarnInterpreterOnly";
+
+    private static final String PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY = "engine.WarnInterpreterOnly";
 
     private static final String PYTHON_OPTION_PYTHONPATH = "python.PythonPath";
     private static final String PYTHON_OPTION_EMULATEJYTHON = "python.EmulateJython";
@@ -105,8 +105,9 @@ public class PythonScriptEngine
     public static final String LOGGER_INIT_NAME = "__logger_init__";
 
     /** Shared Polyglot {@link Engine} across all instances of {@link PythonScriptEngine} */
-    private static final Engine ENGINE = Engine.newBuilder().allowExperimentalOptions(true)
-            .option("engine.WarnInterpreterOnly", "false").build();
+    private static final Engine ENGINE = Engine.newBuilder()
+            // disable warning about fallback runtime (is only available in graalvm)
+            .option(PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false)).build();
 
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
@@ -174,12 +175,6 @@ public class PythonScriptEngine
         lifecycleTracker = new LifecycleTracker();
         scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
 
-        // disable warning about missing TruffleAttach library (is only available in graalvm)
-        Properties props = System.getProperties();
-        props.setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
-        // disable warning about fallback runtime (is only available in graalvm)
-        props.setProperty(SYSTEM_PROPERTY_POLYGLOT_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false));
-
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .out(scriptOutputStream) //
                 .err(scriptErrorStream) //
@@ -241,6 +236,10 @@ public class PythonScriptEngine
                 // Set python path to point to sources stored in
                 .option(PYTHON_OPTION_PYTHONPATH, PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString()
                         + File.pathSeparator + PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH.toString());
+
+        // disable warning about missing TruffleAttach library (is only available in graalvm)
+        // Properties props = System.getProperties();
+        // props.setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
 
         if (this.pythonScriptEngineConfiguration.isVEnvEnabled()) {
             Path venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable();
