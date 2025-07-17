@@ -76,19 +76,11 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
                 contextConfig);
     }
 
-    GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory) {
-        this(factory, factory.getPolyglotEngine(), factory.getContextConfig());
-    }
-
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
         this.factory = factory;
         this.contextConfig = contextConfig.engine(engine);
         this.context.setBindings(new GraalPythonBindings(this.contextConfig, this.context, this),
                 ScriptContext.ENGINE_SCOPE);
-    }
-
-    static Context createDefaultContext(Context.Builder builder, ScriptContext ctxt) {
-        return builder.build();
     }
 
     /**
@@ -238,7 +230,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     private Context createContext(Bindings engineB) {
         Object ctx = engineB.get(POLYGLOT_CONTEXT);
         if (!(ctx instanceof Context)) {
-            ctx = createDefaultContext(contextConfig, context);
+            ctx = contextConfig.build();
             engineB.put(POLYGLOT_CONTEXT, ctx);
         }
         return (Context) ctx;

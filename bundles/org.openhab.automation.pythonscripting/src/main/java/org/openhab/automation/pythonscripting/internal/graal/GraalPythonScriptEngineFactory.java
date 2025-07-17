@@ -43,11 +43,7 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
     public GraalPythonScriptEngineFactory(Engine engine, Context.Builder contextConfig) {
         this.engine = engine;
         this.contextConfig = contextConfig;
-        this.language = getPolyglotEngine().getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
-    }
-
-    public Builder getContextConfig() {
-        return contextConfig;
+        this.language = this.engine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
     }
 
     public Engine getPolyglotEngine() {
@@ -61,7 +57,7 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
     @Override
     public String getEngineVersion() {
-        return getPolyglotEngine().getVersion();
+        return engine.getVersion();
     }
 
     @Override
@@ -105,7 +101,7 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
     @Override
     public GraalPythonScriptEngine getScriptEngine() {
-        return new GraalPythonScriptEngine(this);
+        return new GraalPythonScriptEngine(this, engine, contextConfig);
     }
 
     @Override
