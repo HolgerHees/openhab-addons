@@ -109,6 +109,11 @@ public class PythonScriptEngine
             // disable warning about fallback runtime (is only available in graalvm)
             .option(PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false)).build();
 
+    static {
+        // disable warning about missing TruffleAttach library (is only available in graalvm)
+        System.getProperties().setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
+    }
+
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
             .targetTypeMapping(Value.class, ZonedDateTime.class,
@@ -236,10 +241,6 @@ public class PythonScriptEngine
                 // Set python path to point to sources stored in
                 .option(PYTHON_OPTION_PYTHONPATH, PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString()
                         + File.pathSeparator + PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH.toString());
-
-        // disable warning about missing TruffleAttach library (is only available in graalvm)
-        // Properties props = System.getProperties();
-        // props.setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
 
         if (this.pythonScriptEngineConfiguration.isVEnvEnabled()) {
             Path venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable();
