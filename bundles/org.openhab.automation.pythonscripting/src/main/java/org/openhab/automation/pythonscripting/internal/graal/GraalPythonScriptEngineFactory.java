@@ -12,7 +12,6 @@
  */
 package org.openhab.automation.pythonscripting.internal.graal;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -44,6 +43,10 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
         this.engine = engine;
         this.contextConfig = contextConfig;
         this.language = this.engine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
+
+        if (this.language == null) {
+            throw new IllegalStateException("Graal python language not available");
+        }
     }
 
     public Engine getPolyglotEngine() {
@@ -67,24 +70,22 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
     @Override
     public List<String> getMimeTypes() {
-        return language != null ? List.copyOf(language.getMimeTypes()) : Collections.emptyList();
+        return List.copyOf(language.getMimeTypes());
     }
 
     @Override
     public List<String> getNames() {
-        return language != null
-                ? List.of(language.getName(), GraalPythonScriptEngine.LANGUAGE_ID, language.getImplementationName())
-                : Collections.emptyList();
+        return List.of(language.getName(), GraalPythonScriptEngine.LANGUAGE_ID, language.getImplementationName());
     }
 
     @Override
     public String getLanguageName() {
-        return language != null ? language.getName() : null;
+        return language.getName();
     }
 
     @Override
     public String getLanguageVersion() {
-        return language != null ? language.getVersion() : null;
+        return language.getVersion();
     }
 
     @Override
