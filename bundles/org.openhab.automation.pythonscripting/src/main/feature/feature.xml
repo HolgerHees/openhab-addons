@@ -10,9 +10,9 @@
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.sdk.word/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.shadowed.icu4j/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.llvm.llvm-api/24.2.1</bundle>
-		<!--<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.shadowed.json/24.2.1</bundle> -->
+		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.shadowed.json/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.shadowed.xz/24.2.1</bundle>
-		<!--<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.tools.profiler-tool/24.2.1</bundle> -->
+		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.tools.profiler-tool/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.polyglot.polyglot/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.truffle.truffle-runtime/24.2.1</bundle>
 		<bundle dependency="true">mvn:org.openhab.osgiify/org.graalvm.truffle.truffle-compiler/24.2.1</bundle>
