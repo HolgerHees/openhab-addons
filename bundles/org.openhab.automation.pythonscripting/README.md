@@ -603,7 +603,7 @@ Check via Web UI => Settings / Add-on Settings / Python Scripting
 
 ### Console
 
-The [Openhab Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
+The [openHAB Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
 
 1. `pythonscripting info` is showing you additional data like version numbers, activated features and used path locations
 2. `pythonscripting console` provides an interactive python console where you can try live python features
