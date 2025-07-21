@@ -597,11 +597,24 @@ In addition to standard [value type mappings](https://www.graalvm.org/python/doc
 | list                      | Set           |
 | Item                      | Item          |
 
+### Configuration
+
+Check via Web UI => Settings / Add-on Settings / Python Scripting
+
+### Console
+
+The [Openhab Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
+
+1. `pythonscripting info` is showing you additional data like version numbers, activated features and used path locations
+2. `pythonscripting console` provides an interactive python console where you can try live python features
+3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib
+4. `pythonscripting pip` allowes you check, install or remove external python modules<br/>These feature is only available if [VEnv is enabled](#enabling-venv)
+
 ### Enabling VEnv
 
 VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
 
-1. Login into [openhab console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling 'pythonscripting info'<br/><br/>Important values are:
+1. Login into [openHAB console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling 'pythonscripting info'<br/><br/>Important values are:
 
 - `GraalVM version: 24.2.1`
 - `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`<br/><br/>These values are needed during the next step.
@@ -609,11 +622,11 @@ VEnv based python runtimes are optional, but needed to provide support for addit
 2. Download graalpy-community and create venv
 
 ```shell
-# The downloaded graalpy-community tar.gz must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and your "GraalVM version" of openhab.
+# The downloaded graalpy-community tar.gz must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and your "GraalVM version" of openHAB
 wget -qO- https://github.com/oracle/graalpython/releases/download/graal-24.2.1/graalpy-community-24.2.1-linux-amd64.tar.gz | gunzip | tar xvf -
 cd graalpy-community-24.2.1-linux-amd64/
 
-# The venv target dir must match your "VEnv path" of openhab
+# The venv target dir must match your "VEnv path" of openHAB
 ./bin/graalpy -m venv /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
 ```
 
@@ -625,7 +638,7 @@ apt-get install patchelf
 # yum install patchelf
 ```
 
-After these steps, venv setup is done and will be detected automatically during next openhab restart.
+After these steps, venv setup is done and will be detected automatically during next openHAB restart.
 
 ::: tip VEnv note
 Theoretically you can create venvs with a native python installation too. But it is strongly recommended to use graalpy for it. It will install a "special" version of pip in this venv, which will install patched python modules if available. This increases the compatibility of python modules with graalpython.
@@ -655,7 +668,7 @@ Your VEnv setup is not initialized or detected. Please confirm the correct setup
 
 #### User timezone 'XYZ' is different than openhab regional timezone
 
-This means that your configuration EXTRA_JAVA_OPTS="-Duser.timezone=XYZ" is different then the one, configured in openhab regional settings.
+This means that your configuration EXTRA_JAVA_OPTS="-Duser.timezone=XYZ" is different then the one, configured in openHAB regional settings.
 
 e.g. in openHABian this can be changed in /etc/default/openhab
 
