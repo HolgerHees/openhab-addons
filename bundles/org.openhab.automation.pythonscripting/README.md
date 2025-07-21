@@ -42,36 +42,11 @@ class Test:
 
 ### `PY` Transformation
 
-openHAB provides several [data transformation services](https://www.openhab.org/addons/#transform) as well as the script transformations, that are available from the framework and need no additional installation.
-It allows transforming values using any of the available scripting languages, which means Python Scripting is supported as well.
-See the [transformation docs](https://openhab.org/docs/configuration/transformations.html#script-transformation) for more general information on the usage of script transformations.
+Or as transformation inline script
 
-Use Python Scripting as script transformation by:
-
-1. Creating a script in the `$OPENHAB_CONF/transform` folder with the `.py` extension.
-   The script should take one argument `input` and return a value that supports `toString()` or `null`:
-
-   ```python
-   "String has " + str(len(input)) + " characters"
-   ```
-
-   or 
-   
-   ```python
-   def calc(input):
-       if input is None:
-           return 0
-
-       return "String has " + str(len(input)) + " characters"
-   calc(input)
-   ```
-
-2. Using `PY(<scriptname>.py):%s` as Item state transformation.
-3. Passing parameters is also possible by using a URL like syntax: `PY(<scriptname>.py?arg=value)`.
-   Parameters are injected into the script and can be referenced like variables.
-
-Simple transformations can also be given as an inline script: `PY(|...)`, e.g. `PY(|"String has " + str(len(input)) + "characters")`.
-It should start with the `|` character, quotes within the script may need to be escaped with a backslash `\` when used with another quoted string as in text configurations.
+```text
+String Test "Test [PY(|'String has ' + str(len(input)) + 'characters'):%s]"
+```
 
 ### More Scripting
 
