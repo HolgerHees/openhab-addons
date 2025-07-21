@@ -102,6 +102,9 @@ public class PythonScriptEngineConfiguration {
     private Path venvDirectory;
     private @Nullable Path venvExecutable = null;
 
+    private Version bundleVersion = Version
+            .parse(FrameworkUtil.getBundle(PythonScriptEngineConfiguration.class).getVersion().toString());
+
     private Version graalVersion = Version.parse("0.0.0");
     private Version providedHelperLibVersion = Version.parse("0.0.0");
     private @Nullable Version installedHelperLibVersion = null;
@@ -219,6 +222,10 @@ public class PythonScriptEngineConfiguration {
         return venvExecutable != null;
     }
 
+    public Version getBundleVersion() {
+        return bundleVersion;
+    }
+
     public Version getGraalVersion() {
         return graalVersion;
     }
@@ -308,8 +315,11 @@ public class PythonScriptEngineConfiguration {
                 Matcher currentMatcher = VERSION_PATTERN.matcher(content);
                 if (currentMatcher.find()) {
                     installedHelperLibVersion = Version.parse(currentMatcher.group(1));
-                    if (installedHelperLibVersion.compareTo(providedHelperLibVersion) >= 0) {
-                        // logger.info("Newest helper lib version is deployed.");
+                    int compareResult = installedHelperLibVersion.compareTo(providedHelperLibVersion);
+                    if (compareResult >= 0) {
+                        if (compareResult > 0) {
+                            logger.info("Newer helper libs version '{}' already installed.", installedHelperLibVersion);
+                        }
                         return;
                     }
                 } else {

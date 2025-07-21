@@ -54,8 +54,7 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
 
     private void requireContext() {
         if (context == null) {
-            context = GraalPythonScriptEngine.createDefaultContext(contextBuilder, scriptContext);
-
+            context = contextBuilder.build();
             initGlobal();
         }
     }

@@ -27,7 +27,7 @@
 			<advanced>true</advanced>
 		</parameter>
 		<parameter name="helperEnabled" type="boolean" required="true" groupName="environment">
-			<label>Install openHAB Python helper modules and keep it updated (requires scope module)</label>
+			<label>Install openHAB Python helper modules (requires scope module)</label>
 			<description><![CDATA[
 			Deploy and update openHAB Python helper modules like rule, logger, Registry, Timer etc...<br>
 			If disabled, the openHAB Python helper module can be installed manually by copying it to /conf/automation/python/lib/openhab"

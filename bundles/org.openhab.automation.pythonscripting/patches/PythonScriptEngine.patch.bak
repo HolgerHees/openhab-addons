@@ -1,0 +1,19 @@
+diff --git a/bundles/org.openhab.automation.pythonscripting/src/main/java/org/openhab/automation/pythonscripting/internal/PythonScriptEngine.java b/bundles/org.openhab.automation.pythonscripting/src/main/java/org/openhab/automation/pythonscripting/internal/PythonScriptEngine.java
+index a9082b86ba..90f0c3683d 100644
+--- a/bundles/org.openhab.automation.pythonscripting/src/main/java/org/openhab/automation/pythonscripting/internal/PythonScriptEngine.java
++++ b/bundles/org.openhab.automation.pythonscripting/src/main/java/org/openhab/automation/pythonscripting/internal/PythonScriptEngine.java
+@@ -249,6 +249,14 @@ public class PythonScriptEngine
+             return;
+         }
+ 
++        // needed to get ThreadGroups working in JDK17 (openhab4). Otherwise, Python threads are not working properly.
++        // - if ThreadGroups.isDaemon == true and last python thread is done
++        // ==> ThreadGroup is closed and new python threads can't started anymore
++        // - in jdk21 is handled differently
++        // ==> ThreadGroups does not use the daemon flag anymore and ThreadGroups are not closable anymore
++        // - can be removed in jdk21 only environments
++        Thread.currentThread().getThreadGroup().setDaemon(false);
++
+         logger.debug("Initializing GraalPython script engine...");
+ 
+         ScriptContext ctx = getScriptContext();

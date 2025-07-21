@@ -14,8 +14,6 @@ package org.openhab.automation.pythonscripting.internal.graal;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.Reader;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -30,9 +28,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Context.Builder;
 import org.graalvm.polyglot.Engine;
-import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
@@ -41,8 +37,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A Graal.Python implementation of the script engine. It provides access to the polyglot context using
- * {@link #getPolyglotContext()}.
+ * A Graal.Python implementation of the script engine.
  *
  * @author Holger Hees - Initial contribution
  * @author Jeff James - Initial contribution
@@ -51,53 +46,31 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         implements Compilable, Invocable, AutoCloseable {
 
     public static final String LANGUAGE_ID = "python";
-    private static final String POLYGLOT_CONTEXT = "polyglot.context";
-
-    private static final String PYTHON_OPTION_POSIXMODULEBACKEND = "python.PosixModuleBackend";
-    private static final String PYTHON_OPTION_DONTWRITEBYTECODEFLAG = "python.DontWriteBytecodeFlag";
-    private static final String PYTHON_OPTION_FORCEIMPORTSITE = "python.ForceImportSite";
-    private static final String PYTHON_OPTION_CHECKHASHPYCSMODE = "python.CheckHashPycsMode";
 
     private final Logger logger = LoggerFactory.getLogger(GraalPythonScriptEngine.class);
 
     private final GraalPythonScriptEngineFactory factory;
     private final Context.Builder contextConfig;
+    private final GraalPythonBindings bindings;
 
-    GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory) {
-        this(factory, factory.getPolyglotEngine(), null);
+    /**
+     * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
+     *
+     * @param engine the engine to be used for context configurations
+     * @param contextConfig a base configuration to create new context instances
+     */
+    public static GraalPythonScriptEngine create(Engine engine, Context.Builder contextConfig) {
+        return new GraalPythonScriptEngine(new GraalPythonScriptEngineFactory(engine, contextConfig), engine,
+                contextConfig);
     }
 
     GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
-        Engine engineToUse = (engine != null) ? engine : factory.getPolyglotEngine();
+        logger.debug("GraalPythonScriptEngine created");
 
-        Context.Builder contextConfigToUse = contextConfig;
-        if (contextConfigToUse == null) {
-            contextConfigToUse = Context.newBuilder(LANGUAGE_ID) //
-                    .allowExperimentalOptions(true) //
-                    .allowAllAccess(true) //
-                    .allowHostAccess(HostAccess.ALL) //
-                    // allow creating python threads
-                    .allowCreateThread(true) //
-                    // allow running Python native extensions
-                    .allowNativeAccess(true) //
-                    // allow exporting Python values to polyglot bindings and accessing Java
-                    // choose the backend for the POSIX module
-                    .option(PYTHON_OPTION_POSIXMODULEBACKEND, "java") //
-                    // equivalent to the Python -B flag
-                    .option(PYTHON_OPTION_DONTWRITEBYTECODEFLAG, "true") //
-                    // Force to automatically import site.py module, to make Python packages available
-                    .option(PYTHON_OPTION_FORCEIMPORTSITE, "true") //
-                    // causes the interpreter to always assume hash-based pycs are valid
-                    .option(PYTHON_OPTION_CHECKHASHPYCSMODE, "never");
-        }
-        this.factory = (factory == null) ? new GraalPythonScriptEngineFactory(engineToUse) : factory;
-        this.contextConfig = contextConfigToUse.engine(engineToUse);
-        this.context.setBindings(new GraalPythonBindings(this.contextConfig, this.context, this),
-                ScriptContext.ENGINE_SCOPE);
-    }
-
-    static Context createDefaultContext(Context.Builder builder, ScriptContext ctxt) {
-        return builder.build();
+        this.factory = factory;
+        this.contextConfig = contextConfig.engine(engine);
+        this.bindings = new GraalPythonBindings(this.contextConfig, this.context, this);
+        this.context.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
     }
 
     /**
@@ -120,7 +93,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     }
 
     public Context getPolyglotContext() {
-        return getOrCreateGraalPythonBindings(context).getContext();
+        return bindings.getContext();
     }
 
     static Value evalInternal(Context context, String script) {
@@ -129,21 +102,14 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
 
     @Override
     public Bindings createBindings() {
-        return new GraalPythonBindings(contextConfig, null, this);
+        // Creating a new binding to replace the current one is not needed i context of pythonscripting
+        throw new IllegalArgumentException("Creating binding not supported");
     }
 
     @Override
     public void setBindings(Bindings bindings, int scope) {
-        if (scope == ScriptContext.ENGINE_SCOPE) {
-            Bindings oldBindings = getBindings(scope);
-            if (oldBindings instanceof GraalPythonBindings gpBindings) {
-                gpBindings.updateEngineScriptContext(null);
-            }
-        }
-        super.setBindings(bindings, scope);
-        if (scope == ScriptContext.ENGINE_SCOPE && bindings instanceof GraalPythonBindings gpBindings) {
-            gpBindings.updateEngineScriptContext(getContext());
-        }
+        // Setting a new binding to replace the current one is not needed i context of pythonscripting
+        throw new IllegalArgumentException("Setting binding not supported");
     }
 
     @Override
@@ -151,7 +117,138 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         return eval(createSource(read(reader), ctxt), ctxt);
     }
 
-    static String read(Reader reader) throws ScriptException {
+    @Override
+    public Object eval(String script, ScriptContext ctxt) throws ScriptException {
+        return eval(createSource(script, ctxt), ctxt);
+    }
+
+    private Object eval(Source source, ScriptContext scriptContext) throws ScriptException {
+        try {
+            return getPolyglotContext().eval(source).as(Object.class);
+        } catch (PolyglotException e) {
+            throw toScriptException(e);
+        }
+    }
+
+    @Override
+    public GraalPythonScriptEngineFactory getFactory() {
+        return factory;
+    }
+
+    @Override
+    public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
+        if (thiz == null) {
+            throw new IllegalArgumentException("thiz is not a valid object.");
+        }
+
+        Value thisValue = getPolyglotContext().asValue(thiz);
+        if (!thisValue.canInvokeMember(name)) {
+            if (!thisValue.hasMember(name)) {
+                throw noSuchMethod(name);
+            } else {
+                throw notCallable(name);
+            }
+        }
+        try {
+            return thisValue.invokeMember(name, args).as(Object.class);
+        } catch (PolyglotException e) {
+            throw toScriptException(e);
+        }
+    }
+
+    @Override
+    public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
+        Value function = getPolyglotContext().getBindings(LANGUAGE_ID).getMember(name);
+        if (function == null) {
+            throw noSuchMethod(name);
+        } else if (!function.canExecute()) {
+            throw notCallable(name);
+        }
+        try {
+            return function.execute(args).as(Object.class);
+        } catch (PolyglotException e) {
+            throw toScriptException(e);
+        }
+    }
+
+    @Override
+    public <T> T getInterface(Class<T> clasz) {
+        checkInterface(clasz);
+        return getInterfaceInner(evalInternal(getPolyglotContext(), "this"), clasz);
+    }
+
+    @Override
+    public <T> T getInterface(Object thiz, Class<T> clasz) {
+        if (thiz == null) {
+            throw new IllegalArgumentException("this cannot be null");
+        }
+        checkInterface(clasz);
+        Value thisValue = getPolyglotContext().asValue(thiz);
+        checkThis(thisValue);
+        return getInterfaceInner(thisValue, clasz);
+    }
+
+    @Override
+    public CompiledScript compile(String script) throws ScriptException {
+        Source source = createSource(script, getContext());
+        return compile(this, source);
+    }
+
+    @Override
+    public CompiledScript compile(Reader reader) throws ScriptException {
+        Source source = createSource(read(reader), getContext());
+        return compile(this, source);
+    }
+
+    private static NoSuchMethodException noSuchMethod(String name) throws NoSuchMethodException {
+        throw new NoSuchMethodException(name);
+    }
+
+    private static NoSuchMethodException notCallable(String name) throws NoSuchMethodException {
+        throw new NoSuchMethodException(name + " is not a function");
+    }
+
+    private static CompiledScript compile(GraalPythonScriptEngine thiz, Source source) throws ScriptException {
+        try {
+            // Syntax check
+            thiz.getPolyglotContext().parse(source);
+        } catch (PolyglotException pex) {
+            throw toScriptException(pex);
+        }
+
+        return new CompiledScript() {
+            @Override
+            public ScriptEngine getEngine() {
+                return thiz;
+            }
+
+            @Override
+            public Object eval(ScriptContext ctx) throws ScriptException {
+                return thiz.eval(source, ctx);
+            }
+        };
+    }
+
+    private static void checkInterface(Class<?> clasz) {
+        if (clasz == null || !clasz.isInterface()) {
+            throw new IllegalArgumentException("interface Class expected in getInterface");
+        }
+    }
+
+    private static void checkThis(Value thiz) {
+        if (thiz.isHostObject() || !thiz.hasMembers()) {
+            throw new IllegalArgumentException("getInterface cannot be called on non-script object");
+        }
+    }
+
+    private static <T> T getInterfaceInner(Value thiz, Class<T> iface) {
+        if (!isInterfaceImplemented(iface, thiz)) {
+            return null;
+        }
+        return thiz.as(iface);
+    }
+
+    private static String read(Reader reader) throws ScriptException {
         final StringBuilder builder = new StringBuilder();
         final char[] buffer = new char[1024];
         try {
@@ -170,11 +267,6 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         }
     }
 
-    @Override
-    public Object eval(String script, ScriptContext ctxt) throws ScriptException {
-        return eval(createSource(script, ctxt), ctxt);
-    }
-
     private static Source createSource(String script, ScriptContext ctxt) throws ScriptException {
         final Object val = ctxt.getAttribute(ScriptEngine.FILENAME);
         if (val == null) {
@@ -188,14 +280,23 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         }
     }
 
-    private Object eval(Source source, ScriptContext scriptContext) throws ScriptException {
-        GraalPythonBindings engineBindings = getOrCreateGraalPythonBindings(scriptContext);
-        Context polyglotContext = engineBindings.getContext();
-        try {
-            return polyglotContext.eval(source).as(Object.class);
-        } catch (PolyglotException e) {
-            throw toScriptException(e);
+    private static boolean isInterfaceImplemented(final Class<?> iface, final Value obj) {
+        for (final Method method : iface.getMethods()) {
+            // ignore methods of java.lang.Object class
+            if (method.getDeclaringClass() == Object.class) {
+                continue;
+            }
+
+            // skip check for default methods - non-abstract, interface methods
+            if (!Modifier.isAbstract(method.getModifiers())) {
+                continue;
+            }
+
+            if (!obj.canInvokeMember(method.getName())) {
+                return false;
+            }
         }
+        return true;
     }
 
     private static ScriptException toScriptException(PolyglotException ex) {
@@ -231,185 +332,5 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
             }
         }
         return sex;
-    }
-
-    private GraalPythonBindings getOrCreateGraalPythonBindings(ScriptContext scriptContext) {
-        Bindings engineB = scriptContext.getBindings(ScriptContext.ENGINE_SCOPE);
-        if (engineB instanceof GraalPythonBindings) {
-            return ((GraalPythonBindings) engineB);
-        } else {
-            GraalPythonBindings bindings = new GraalPythonBindings(createContext(engineB), scriptContext, this);
-            bindings.putAll(engineB);
-            return bindings;
-        }
-    }
-
-    private Context createContext(Bindings engineB) {
-        Object ctx = engineB.get(POLYGLOT_CONTEXT);
-        if (!(ctx instanceof Context)) {
-            ctx = createDefaultContext(contextConfig, context);
-            engineB.put(POLYGLOT_CONTEXT, ctx);
-        }
-        return (Context) ctx;
-    }
-
-    @Override
-    public GraalPythonScriptEngineFactory getFactory() {
-        return factory;
-    }
-
-    @Override
-    public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
-        if (thiz == null) {
-            throw new IllegalArgumentException("thiz is not a valid object.");
-        }
-        GraalPythonBindings engineBindings = getOrCreateGraalPythonBindings(context);
-        Value thisValue = engineBindings.getContext().asValue(thiz);
-
-        if (!thisValue.canInvokeMember(name)) {
-            if (!thisValue.hasMember(name)) {
-                throw noSuchMethod(name);
-            } else {
-                throw notCallable(name);
-            }
-        }
-        try {
-            return thisValue.invokeMember(name, args).as(Object.class);
-        } catch (PolyglotException e) {
-            throw toScriptException(e);
-        }
-    }
-
-    @Override
-    public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
-        GraalPythonBindings engineBindings = getOrCreateGraalPythonBindings(context);
-        Value function = engineBindings.getContext().getBindings(LANGUAGE_ID).getMember(name);
-
-        if (function == null) {
-            throw noSuchMethod(name);
-        } else if (!function.canExecute()) {
-            throw notCallable(name);
-        }
-        try {
-            return function.execute(args).as(Object.class);
-        } catch (PolyglotException e) {
-            throw toScriptException(e);
-        }
-    }
-
-    private static NoSuchMethodException noSuchMethod(String name) throws NoSuchMethodException {
-        throw new NoSuchMethodException(name);
-    }
-
-    private static NoSuchMethodException notCallable(String name) throws NoSuchMethodException {
-        throw new NoSuchMethodException(name + " is not a function");
-    }
-
-    @Override
-    public <T> T getInterface(Class<T> clasz) {
-        checkInterface(clasz);
-        return getInterfaceInner(evalInternal(getPolyglotContext(), "this"), clasz);
-    }
-
-    @Override
-    public <T> T getInterface(Object thiz, Class<T> clasz) {
-        if (thiz == null) {
-            throw new IllegalArgumentException("this cannot be null");
-        }
-        checkInterface(clasz);
-        Value thisValue = getPolyglotContext().asValue(thiz);
-        checkThis(thisValue);
-        return getInterfaceInner(thisValue, clasz);
-    }
-
-    private static void checkInterface(Class<?> clasz) {
-        if (clasz == null || !clasz.isInterface()) {
-            throw new IllegalArgumentException("interface Class expected in getInterface");
-        }
-    }
-
-    private static void checkThis(Value thiz) {
-        if (thiz.isHostObject() || !thiz.hasMembers()) {
-            throw new IllegalArgumentException("getInterface cannot be called on non-script object");
-        }
-    }
-
-    private static <T> T getInterfaceInner(Value thiz, Class<T> iface) {
-        if (!isInterfaceImplemented(iface, thiz)) {
-            return null;
-        }
-        return thiz.as(iface);
-    }
-
-    @Override
-    public CompiledScript compile(String script) throws ScriptException {
-        Source source = createSource(script, getContext());
-        return compile(source);
-    }
-
-    @Override
-    public CompiledScript compile(Reader reader) throws ScriptException {
-        Source source = createSource(read(reader), getContext());
-        return compile(source);
-    }
-
-    private CompiledScript compile(Source source) throws ScriptException {
-        checkSyntax(source);
-        return new CompiledScript() {
-            @Override
-            public ScriptEngine getEngine() {
-                return GraalPythonScriptEngine.this;
-            }
-
-            @Override
-            public Object eval(ScriptContext ctx) throws ScriptException {
-                return GraalPythonScriptEngine.this.eval(source, ctx);
-            }
-        };
-    }
-
-    private void checkSyntax(Source source) throws ScriptException {
-        try {
-            getPolyglotContext().parse(source);
-        } catch (PolyglotException pex) {
-            throw toScriptException(pex);
-        }
-    }
-
-    /**
-     * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
-     * for new polyglot {@link Context} instances. Polyglot context instances can be accessed from
-     * {@link ScriptContext} instances using {@link #getPolyglotContext()}. The
-     * {@link Builder#out(OutputStream) out},{@link Builder#err(OutputStream) err} and
-     * {@link Builder#in(InputStream) in} stream configuration are not inherited from the provided
-     * polyglot context config. Instead {@link ScriptContext} output and input streams are used.
-     *
-     * @param engine the engine to be used for context configurations or <code>null</code> if a
-     *            default engine should be used.
-     * @param newContextConfig a base configuration to create new context instances or
-     *            <code>null</code> if the default configuration should be used to construct new
-     *            context instances.
-     */
-    public static GraalPythonScriptEngine create(Engine engine, Context.Builder newContextConfig) {
-        return new GraalPythonScriptEngine(null, engine, newContextConfig);
-    }
-
-    private static boolean isInterfaceImplemented(final Class<?> iface, final Value obj) {
-        for (final Method method : iface.getMethods()) {
-            // ignore methods of java.lang.Object class
-            if (method.getDeclaringClass() == Object.class) {
-                continue;
-            }
-
-            // skip check for default methods - non-abstract, interface methods
-            if (!Modifier.isAbstract(method.getModifiers())) {
-                continue;
-            }
-
-            if (!obj.canInvokeMember(method.getName())) {
-                return false;
-            }
-        }
-        return true;
     }
 }

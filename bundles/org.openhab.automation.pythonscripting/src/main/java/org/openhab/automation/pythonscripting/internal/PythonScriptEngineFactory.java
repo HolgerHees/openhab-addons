@@ -12,6 +12,7 @@
  */
 package org.openhab.automation.pythonscripting.internal;
 
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,7 @@ import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependency
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.config.core.ConfigurableService;
+import org.openhab.core.i18n.TimeZoneProvider;
 import org.osgi.framework.Constants;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -57,11 +59,22 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
     @Activate
     public PythonScriptEngineFactory(final @Reference PythonDependencyTracker pythonDependencyTracker,
-            Map<String, Object> config) {
+            final @Reference TimeZoneProvider timeZoneProvider, Map<String, Object> config) {
         logger.debug("Loading PythonScriptEngineFactory");
 
         this.pythonDependencyTracker = pythonDependencyTracker;
         this.pythonScriptEngineConfiguration = new PythonScriptEngineConfiguration();
+
+        String defaultTimezone = ZoneId.systemDefault().getId();
+        String providerTimezone = timeZoneProvider.getTimeZone().getId();
+        if (!defaultTimezone.equals(providerTimezone)) {
+            String MSG = """
+                    User timezone '{}' is different than openhab regional timezone '{}'.
+                    Please double check that your startup setting of '-Duser.timezone=' is matching your openhab regional setting
+                    Pythonscripting is running with timezone '{}'""";
+            logger.warn(MSG, defaultTimezone, providerTimezone, defaultTimezone);
+            // System.setProperty("user.timezone", "Australia/Tasmania");
+        }
 
         modified(config);
     }

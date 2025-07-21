@@ -26,11 +26,11 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -82,6 +82,8 @@ public class PythonScriptEngine
 
     private static final String SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION = "polyglotimpl.AttachLibraryFailureAction";
 
+    private static final String PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY = "engine.WarnInterpreterOnly";
+
     private static final String PYTHON_OPTION_PYTHONPATH = "python.PythonPath";
     private static final String PYTHON_OPTION_EMULATEJYTHON = "python.EmulateJython";
     private static final String PYTHON_OPTION_POSIXMODULEBACKEND = "python.PosixModuleBackend";
@@ -103,23 +105,30 @@ public class PythonScriptEngine
     public static final String LOGGER_INIT_NAME = "__logger_init__";
 
     /** Shared Polyglot {@link Engine} across all instances of {@link PythonScriptEngine} */
-    private static final Engine ENGINE = Engine.newBuilder().allowExperimentalOptions(true)
-            .option("engine.WarnInterpreterOnly", "false").build();
+    private static final Engine ENGINE = Engine.newBuilder()
+            // disable warning about fallback runtime (is only available in graalvm)
+            .option(PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false)).build();
+
+    static {
+        // disable warning about missing TruffleAttach library (is only available in graalvm)
+        System.getProperties().setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
+    }
 
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
-            // Translate python datetime with timezone to java.time.ZonedDateTime
             .targetTypeMapping(Value.class, ZonedDateTime.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo")
-                            && !v.getMember("tzinfo").isNull(),
-                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()),
+                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
+                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
+                            + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : "")),
                     HostAccess.TargetMappingPrecedence.LOW)
 
-            // Translate python datetime without timezone to java.time.Instant
+            // Translate python datetime java.time.Instant
             .targetTypeMapping(Value.class, Instant.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo")
-                            && v.getMember("tzinfo").isNull(),
-                    v -> Instant.parse(v.invokeMember("isoformat").asString() + "Z"),
+                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
+                    v -> ZonedDateTime
+                            .parse(v.invokeMember("isoformat").asString()
+                                    + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : ""))
+                            .toInstant(),
                     HostAccess.TargetMappingPrecedence.LOW)
 
             // Translate python timedelta to java.time.Duration
@@ -170,10 +179,6 @@ public class PythonScriptEngine
 
         lifecycleTracker = new LifecycleTracker();
         scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
-
-        // disable warning about missing TruffleAttach library (is only available in graalvm)
-        Properties props = System.getProperties();
-        props.setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
 
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .out(scriptOutputStream) //
