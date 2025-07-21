@@ -50,7 +50,7 @@ String Test "Test [PY(|'String has ' + str(len(input)) + 'characters'):%s]"
 
 ### More Scripting
 
-A complete Documentation about the usage of Python Scripting Rules and Transformation scripts can be found at [helper lib](https://github.com/openhab/openhab-python/blob/main/README.md) project.
+A complete Documentation about the usage of Python Scripting Rules and Transformation Scripts can be found at [helper lib](https://github.com/openhab/openhab-python/blob/main/README.md) project.
 
 ## Add-on Administration
 
