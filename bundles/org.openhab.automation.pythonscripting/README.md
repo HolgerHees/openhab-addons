@@ -67,20 +67,31 @@ Check via Web UI => Settings / Add-on Settings / Python Scripting
 The [openHAB Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
 
 1. `pythonscripting info` is showing you additional data like version numbers, activated features and used path locations
+
+![Pythonscripting info](doc/console_pythonscripting_info.png)
+
 2. `pythonscripting console` provides an interactive python console where you can try live python features
+
+![Pythonscripting info](doc/console_pythonscripting_console.png)
+
 3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib
+
+![Pythonscripting info](doc/console_pythonscripting_update.png)
+
 4. `pythonscripting pip` allowes you check, install or remove external python modules<br/>These feature is only available if [VEnv is enabled](#enabling-venv)
 
 ### Enabling VEnv
 
 VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
 
-1. Login into [openHAB console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling 'pythonscripting info'<br/><br/>Important values are:
+1. Login into [openHAB console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling `pythonscripting info`<br/><br/>Important values are:
+
+- `GraalVM version: 24.2.1`
+- `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`
 
 ![Add-on informations](doc/venv_info.png)
 
-- `GraalVM version: 24.2.1`
-- `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`<br/><br/>These values are needed during the next step.
+These values are needed during the next step
 
 2. Download graalpy-community and create venv
 
