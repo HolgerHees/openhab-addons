@@ -62,6 +62,8 @@ including all examples above, much more detailed.
 
 Check via Web UI => Settings / Add-on Settings / Python Scripting
 
+![Pythonscripting configuration](doc/console_pythonscripting_configuration.png)
+
 ### Console
 
 The [openHAB Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
@@ -72,11 +74,11 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 2. `pythonscripting console` provides an interactive python console where you can try live python features
 
-![Pythonscripting info](doc/console_pythonscripting_console.png)
+![Pythonscripting console](doc/console_pythonscripting_console.png)
 
 3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib
 
-![Pythonscripting info](doc/console_pythonscripting_update.png)
+![Pythonscripting update](doc/console_pythonscripting_update.png)
 
 4. `pythonscripting pip` allowes you check, install or remove external python modules<br/>These feature is only available if [VEnv is enabled](#enabling-venv)
 
