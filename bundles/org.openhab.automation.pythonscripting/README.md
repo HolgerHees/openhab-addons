@@ -62,7 +62,7 @@ including all examples above, much more detailed.
 
 Check via Web UI => Settings / Add-on Settings / Python Scripting
 
-![Pythonscripting configuration](doc/console_pythonscripting_configuration.png)
+![Pythonscripting configuration](doc/pythonscripting_configuration.png)
 
 ### Console
 
