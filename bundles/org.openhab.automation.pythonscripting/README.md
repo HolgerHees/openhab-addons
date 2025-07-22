@@ -148,6 +148,8 @@ Your VEnv setup is not initialized or detected. Please confirm the correct setup
 
 ### User timezone 'XYZ' is different than openhab regional timezone
 
+![Timezone mismatch](doc/logs_timezone_mismatch.png)
+
 This means that your configuration EXTRA_JAVA_OPTS="-Duser.timezone=XYZ" is different then the one, configured in openHAB regional settings.
 
 e.g. in openHABian this can be changed in /etc/default/openhab
