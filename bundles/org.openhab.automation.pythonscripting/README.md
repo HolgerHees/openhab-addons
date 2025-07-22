@@ -82,6 +82,10 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 4. `pythonscripting pip` allowes you check, install or remove external python modules<br/>These feature is only available if [VEnv is enabled](#enabling-venv)
 
+![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)
+![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)
+![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
+
 ### Enabling VEnv
 
 VEnv based python runtimes are optional, but needed to provide support for additional modules via 'pip' and for native modules. To activate this feature, simply follow the steps below.
