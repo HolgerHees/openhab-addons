@@ -144,7 +144,9 @@ You should also check your logs for a message related to the helper lib deployme
 
 ### Can't installing pip modules. VEnv not enabled.
 
-Your VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
+![VEnv missing](doc/logs_venv_missing.png)
+
+You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
 ### User timezone 'XYZ' is different than openhab regional timezone
 
