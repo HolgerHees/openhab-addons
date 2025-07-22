@@ -77,6 +77,8 @@ VEnv based python runtimes are optional, but needed to provide support for addit
 
 1. Login into [openHAB console](https://www.openhab.org/docs/administration/console.html) and check your current pythonscripting environment by calling 'pythonscripting info'<br/><br/>Important values are:
 
+![Add-on informations](doc/venv_info.png)
+
 - `GraalVM version: 24.2.1`
 - `VEnv path: /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv`<br/><br/>These values are needed during the next step.
 
