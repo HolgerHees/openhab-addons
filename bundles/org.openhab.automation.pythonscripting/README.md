@@ -52,7 +52,7 @@ String Test "Test [PY(|'String has ' + str(len(input)) + 'characters'):%s]"
 
 A complete Documentation about Python Scripting Rules and Transformation Scripts can be found at
 
-[openHAB Python Scripting](https://github.com/openhab/openhab-python/blob/main/README.md)
+[>> openHAB Python Scripting <<](https://github.com/openhab/openhab-python/blob/main/README.md)
 
 including all examples above, much more detailed.
 
