@@ -111,11 +111,11 @@ public class PythonScriptEngineConfiguration {
 
     public static Version parseHelperLibVersion(@Nullable String version) throws IllegalArgumentException {
         // substring(1) => remove leading 'v'
-        return Version.parse(version.startsWith("v") ? version.substring(1) : version);
+        return Version.parse(version != null && version.startsWith("v") ? version.substring(1) : version);
     }
 
     @Activate
-    public PythonScriptEngineConfiguration() {
+    public PythonScriptEngineConfiguration(Map<String, Object> config, PythonScriptEngineFactory factory) {
         Path userdataDir = Paths.get(OpenHAB.getUserDataFolder());
 
         String tmpDir = System.getProperty(SYSTEM_PROPERTY_JAVA_IO_TMPDIR);
@@ -153,21 +153,48 @@ public class PythonScriptEngineConfiguration {
         if (Files.exists(venvPythonBin)) {
             venvExecutable = venvPythonBin;
         }
+
+        initHelperLib();
+
+        this.update(config, factory);
     }
 
     /**
      * Update configuration
      *
      * @param config Configuration parameters to apply to ScriptEngine
+     * @param intitial
      */
-    void update(Map<String, Object> config, ScriptEngineFactory factory) {
+    public void modified(Map<String, Object> config, ScriptEngineFactory factory) {
+        boolean oldScopeEnabled = configuration.scopeEnabled;
+        boolean oldInjectionEnabled = !isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED);
+        boolean oldDependencyTrackingEnabled = isDependencyTrackingEnabled();
+
+        this.update(config, factory);
+
+        if (oldScopeEnabled != isScopeEnabled()) {
+            logger.info("{} scope for Python Scripting. Please resave your scripts to apply this change.",
+                    isScopeEnabled() ? "Enabled" : "Disabled");
+        }
+        if (oldInjectionEnabled != !isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)) {
+            logger.info("{} injection for Python Scripting. Please resave your UI-based scripts to apply this change.",
+                    !isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED) ? "Enabled" : "Disabled");
+        }
+        if (oldDependencyTrackingEnabled != isDependencyTrackingEnabled()) {
+            logger.info("{} dependency tracking for Python Scripting. Please resave your scripts to apply this change.",
+                    isDependencyTrackingEnabled() ? "Enabled" : "Disabled");
+        }
+    }
+
+    private void update(Map<String, Object> config, ScriptEngineFactory factory) {
         logger.trace("Python Script Engine Configuration: {}", config);
 
+        String oldPipModules = configuration.pipModules;
         configuration = new Configuration(config).as(PythonScriptingConfiguration.class);
 
-        initHelperLib();
-
-        initPipModules(factory);
+        if (!oldPipModules.equals(configuration.pipModules)) {
+            initPipModules(factory);
+        }
     }
 
     public boolean isScopeEnabled() {

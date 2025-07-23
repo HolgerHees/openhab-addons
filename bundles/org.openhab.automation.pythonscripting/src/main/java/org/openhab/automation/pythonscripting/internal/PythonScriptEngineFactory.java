@@ -55,7 +55,7 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
     private final List<String> scriptTypes = Arrays.asList("py", SCRIPT_TYPE);
     private final PythonDependencyTracker pythonDependencyTracker;
-    private final PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
+    private final PythonScriptEngineConfiguration configuration;
 
     @Activate
     public PythonScriptEngineFactory(final @Reference PythonDependencyTracker pythonDependencyTracker,
@@ -63,20 +63,19 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         logger.debug("Loading PythonScriptEngineFactory");
 
         this.pythonDependencyTracker = pythonDependencyTracker;
-        this.pythonScriptEngineConfiguration = new PythonScriptEngineConfiguration();
+        this.configuration = new PythonScriptEngineConfiguration(config, this);
 
         String defaultTimezone = ZoneId.systemDefault().getId();
         String providerTimezone = timeZoneProvider.getTimeZone().getId();
         if (!defaultTimezone.equals(providerTimezone)) {
-            String MSG = """
+            String msg = """
                     User timezone '{}' is different than openhab regional timezone '{}'.
-                    Please double check that your startup setting of '-Duser.timezone=' is matching your openhab regional setting
-                    Pythonscripting is running with timezone '{}'""";
-            logger.warn(MSG, defaultTimezone, providerTimezone, defaultTimezone);
+                    Check that your EXTRA_JAVA_OPTS="-Duser.timezone=" setting is matching your openhab regional setting
+                    Additionally the ENVIRONMENT variable 'TZ', if provided, must match your openhab regional setting
+                    Python Scripting is running with timezone '{}'""";
+            logger.warn(msg, defaultTimezone, providerTimezone, defaultTimezone);
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
-
-        modified(config);
     }
 
     @Deactivate
@@ -86,7 +85,7 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
     @Modified
     protected void modified(Map<String, Object> config) {
-        this.pythonScriptEngineConfiguration.update(config, this);
+        this.configuration.modified(config, this);
     }
 
     @Override
@@ -106,7 +105,7 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         if (!scriptTypes.contains(scriptType)) {
             return null;
         }
-        return new PythonScriptEngine(pythonDependencyTracker, pythonScriptEngineConfiguration);
+        return new PythonScriptEngine(pythonDependencyTracker, configuration);
     }
 
     @Override
@@ -115,6 +114,6 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
     }
 
     public PythonScriptEngineConfiguration getConfiguration() {
-        return this.pythonScriptEngineConfiguration;
+        return this.configuration;
     }
 }

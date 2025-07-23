@@ -161,6 +161,8 @@ public class PythonScriptEngine
     private boolean initialized = false;
     private boolean closed = false;
 
+    private String engineIdentifier = "<uninitialized>";
+
     private final ContextOutput scriptOutputStream;
     private final ContextOutput scriptErrorStream;
     private final ContextInput scriptInputStream;
@@ -270,19 +272,20 @@ public class PythonScriptEngine
     @Override
     protected void beforeInvocation() {
         lock.lock();
-        logger.debug("Lock acquired before invocation.");
+        logger.debug("Lock acquired before invocation for engine '{}'", this.engineIdentifier);
 
         if (initialized) {
             return;
         }
 
-        logger.debug("Initializing GraalPython script engine...");
+        logger.debug("Initializing GraalPython script engine '{}' ...", this.engineIdentifier);
 
         ScriptContext ctx = getScriptContext();
 
         // these are added post-construction, so we need to fetch them late
         String engineIdentifier = (String) ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
         if (engineIdentifier != null) {
+            this.engineIdentifier = engineIdentifier;
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
             if (scriptExtensionAccessor == null) {
@@ -293,7 +296,8 @@ public class PythonScriptEngine
                     .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
             if (scriptDependencyListener == null) {
                 logger.warn(
-                        "Failed to retrieve script script dependency listener from engine bindings. Script dependency tracking will be disabled.");
+                        "Failed to retrieve script dependency listener from engine bindings. Script dependency tracking will be disabled for engine '{}'.",
+                        this.engineIdentifier);
             }
             this.scriptDependencyListener = scriptDependencyListener;
 
@@ -324,7 +328,7 @@ public class PythonScriptEngine
                                         .build());
                     }
                 } catch (IOException e) {
-                    logger.error("Failed to inject import wrapper", e);
+                    logger.error("Failed to inject import wrapper for engine '{}'", this.engineIdentifier, e);
                     throw new IllegalArgumentException("Failed to inject import wrapper", e);
                 }
             }
@@ -369,7 +373,7 @@ public class PythonScriptEngine
     @Override
     protected Object afterInvocation(Object obj) {
         lock.unlock();
-        logger.debug("Lock released after invocation.");
+        logger.debug("Lock released after invocation for engine '{}'.", this.engineIdentifier);
         return super.afterInvocation(obj);
     }
 
@@ -382,10 +386,12 @@ public class PythonScriptEngine
             // PolyglotException will always be wrapped into ScriptException and they will be visualized in
             // org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl
             if (logger.isDebugEnabled()) {
-                logger.debug("Failed to execute script (PolyglotException): {}", stringifyThrowable(e.getCause()));
+                logger.debug("Failed to execute script (PolyglotException) for engine '{}': {}", this.engineIdentifier,
+                        stringifyThrowable(e.getCause()));
             }
         } else if (e.getCause() instanceof IllegalArgumentException) {
-            logger.error("Failed to execute script (IllegalArgumentException): {}", stringifyThrowable(e.getCause()));
+            logger.error("Failed to execute script (IllegalArgumentException) for engine '{}': {}",
+                    this.engineIdentifier, stringifyThrowable(e.getCause()));
         }
 
         lock.unlock();
@@ -415,7 +421,7 @@ public class PythonScriptEngine
     @Override
     public void lock() {
         lock.lock();
-        logger.debug("Lock acquired.");
+        logger.debug("Lock acquired for engine '{}'.", this.engineIdentifier);
     }
 
     @Override
@@ -426,21 +432,21 @@ public class PythonScriptEngine
     @Override
     public boolean tryLock() {
         boolean acquired = lock.tryLock();
-        logger.debug("{}", acquired ? "Lock acquired." : "Lock not acquired.");
+        logger.debug("{} for engine '{}'", acquired ? "Lock acquired." : "Lock not acquired.", this.engineIdentifier);
         return acquired;
     }
 
     @Override
     public boolean tryLock(long l, TimeUnit timeUnit) throws InterruptedException {
         boolean acquired = lock.tryLock(l, timeUnit);
-        logger.debug("{}", acquired ? "Lock acquired." : "Lock not acquired.");
+        logger.debug("{} for engine '{}'", acquired ? "Lock acquired." : "Lock not acquired.", this.engineIdentifier);
         return acquired;
     }
 
     @Override
     public void unlock() {
         lock.unlock();
-        logger.debug("Lock released.");
+        logger.debug("Lock released for engine '{}'.", this.engineIdentifier);
     }
 
     @Override
@@ -453,7 +459,7 @@ public class PythonScriptEngine
             } catch (Exception e) {
                 logger.warn("Ignoreable exception during dispose: {}", stringifyThrowable(e));
             }
-            logger.debug("Engine disposed.");
+            logger.debug("Engine '{}' disposed.", this.engineIdentifier);
 
             try {
                 super.close();
@@ -461,11 +467,11 @@ public class PythonScriptEngine
                 logger.warn("Ignoreable exception during close: {}", stringifyThrowable(e));
             }
 
-            logger.debug("Engine closed.");
+            logger.debug("Engine '{}' closed.", this.engineIdentifier);
 
             closed = true;
         } else {
-            logger.debug("Engine already disposed and closed.");
+            logger.debug("Engine '{}' already disposed and closed.", this.engineIdentifier);
         }
 
         lock.unlock();
