@@ -46,6 +46,7 @@ import org.openhab.automation.pythonscripting.internal.PythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonScriptFileWatcher;
+import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngine;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
 import org.openhab.core.config.core.ConfigDescription;
@@ -209,7 +210,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 err(OutputStream.nullOutputStream()).//
                 option("engine.WarnInterpreterOnly", "false").//
                 build();
-        Language language = tempEngine.getLanguages().get("python");
+        Language language = tempEngine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
         console.println("  Python version: " + language.getVersion());
         Version version = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
         console.println("  Helper lib version: " + (version != null ? version.toString() : "disabled"));
