@@ -22,7 +22,9 @@ import javax.script.ScriptEngine;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
+import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
+import org.openhab.core.OpenHAB;
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.config.core.ConfigurableService;
@@ -57,6 +59,8 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
     private final PythonDependencyTracker pythonDependencyTracker;
     private final PythonScriptEngineConfiguration configuration;
 
+    private final @Nullable Language language;
+
     @Activate
     public PythonScriptEngineFactory(final @Reference PythonDependencyTracker pythonDependencyTracker,
             final @Reference TimeZoneProvider timeZoneProvider, Map<String, Object> config) {
@@ -65,14 +69,40 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         this.pythonDependencyTracker = pythonDependencyTracker;
         this.configuration = new PythonScriptEngineConfiguration(config, this);
 
+        this.language = PythonScriptEngine.getLanguage();
+        if (this.language == null) {
+            StringBuilder msg = new StringBuilder().append("""
+                    Graal python language not available.
+                    This can occur after a new Add-on installation, if JSScripting is active at the same time.
+
+                    """);
+            if (this.configuration.getBundleVersion().toString().split("\\.").length > 3) {
+                String configFolder = OpenHAB.getConfigFolder();
+                msg.append("In that case, follow these steps.") //
+                        .append("\n") //
+                        .append("1. Uninstall the current \"Python Scripting Next\" Add-on.\n")
+                        .append("2. Stop openhab.\n")
+                        .append("3. Put \"Python Scripting Next\" Add-on kar file into folder \"").append(configFolder)
+                        .append("/addons/\".\n") //
+                        .append("4. Enable the Add-on in \"").append(configFolder)
+                        .append("/conf/services/addons.cfg\" with an entry like \"automation = pythonscripting\".\n") //
+                        .append("   If JSScripting is enabled too, the entry looks like \"automation = jsscripting,pythonscripting\".\n") //
+                        .append("\n") //
+                        .append("After, just start openhab again to initialize available graal languages properly.");
+            } else {
+                msg.append("Just restart openhab to initialize available graal languages properly.");
+            }
+            logger.error("{}", msg);
+        }
+
         String defaultTimezone = ZoneId.systemDefault().getId();
         String providerTimezone = timeZoneProvider.getTimeZone().getId();
         if (!defaultTimezone.equals(providerTimezone)) {
             String msg = """
                     User timezone '{}' is different than openhab regional timezone '{}'.
-                    Check that your EXTRA_JAVA_OPTS="-Duser.timezone=" setting is matching your openhab regional setting
-                    Additionally the ENVIRONMENT variable 'TZ', if provided, must match your openhab regional setting
-                    Python Scripting is running with timezone '{}'""";
+                    Check that your EXTRA_JAVA_OPTS="-Duser.timezone=" setting is matching your openhab regional setting.
+                    Additionally the ENVIRONMENT variable 'TZ', if provided, must match your openhab regional setting.
+                    Python Scripting is running with timezone '{}'.""";
             logger.warn(msg, defaultTimezone, providerTimezone, defaultTimezone);
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
@@ -102,7 +132,7 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
     @Override
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
-        if (!scriptTypes.contains(scriptType)) {
+        if (!scriptTypes.contains(scriptType) || language == null) {
             return null;
         }
         return new PythonScriptEngine(pythonDependencyTracker, configuration);

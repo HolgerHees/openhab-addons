@@ -47,6 +47,7 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
+import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
@@ -80,9 +81,9 @@ public class PythonScriptEngine
     public static final String CONTEXT_KEY_ENGINE_LOGGER_INPUT = "ctx.engine-logger-input";
     public static final String CONTEXT_KEY_SCRIPT_FILENAME = "javax.script.filename";
 
-    private static final String SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION = "polyglotimpl.AttachLibraryFailureAction";
+    public static final String PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY = "engine.WarnInterpreterOnly";
 
-    private static final String PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY = "engine.WarnInterpreterOnly";
+    private static final String SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION = "polyglotimpl.AttachLibraryFailureAction";
 
     private static final String PYTHON_OPTION_PYTHONPATH = "python.PythonPath";
     private static final String PYTHON_OPTION_EMULATEJYTHON = "python.EmulateJython";
@@ -105,7 +106,7 @@ public class PythonScriptEngine
     public static final String LOGGER_INIT_NAME = "__logger_init__";
 
     /** Shared Polyglot {@link Engine} across all instances of {@link PythonScriptEngine} */
-    private static final Engine ENGINE = Engine.newBuilder()
+    private static Engine ENGINE = Engine.newBuilder()
             // disable warning about fallback runtime (is only available in graalvm)
             .option(PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false)).build();
 
@@ -539,5 +540,9 @@ public class PythonScriptEngine
             set.add(element.asString());
         }
         return set;
+    }
+
+    public static @Nullable Language getLanguage() {
+        return ENGINE.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
     }
 }

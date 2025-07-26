@@ -43,10 +43,6 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
         this.engine = engine;
         this.contextConfig = contextConfig;
         this.language = this.engine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
-
-        if (this.language == null) {
-            throw new IllegalStateException("Graal python language not available");
-        }
     }
 
     public Engine getPolyglotEngine() {

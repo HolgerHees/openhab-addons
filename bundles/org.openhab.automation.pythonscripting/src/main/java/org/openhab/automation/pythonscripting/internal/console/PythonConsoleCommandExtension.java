@@ -14,7 +14,6 @@ package org.openhab.automation.pythonscripting.internal.console;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.lang.module.ModuleDescriptor.Version;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -40,13 +39,11 @@ import javax.script.ScriptException;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonScriptFileWatcher;
-import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngine;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
 import org.openhab.core.config.core.ConfigDescription;
@@ -205,13 +202,8 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         console.println("Runtime:");
         console.println("  Bundle version: " + pythonScriptEngineConfiguration.getBundleVersion());
         console.println("  GraalVM version: " + pythonScriptEngineConfiguration.getGraalVersion());
-        Engine tempEngine = Engine.newBuilder().useSystemProperties(false).//
-                out(OutputStream.nullOutputStream()).//
-                err(OutputStream.nullOutputStream()).//
-                option("engine.WarnInterpreterOnly", "false").//
-                build();
-        Language language = tempEngine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
-        console.println("  Python version: " + language.getVersion());
+        Language language = PythonScriptEngine.getLanguage();
+        console.println("  Python version: " + (language != null ? language.getVersion() : "unavailable"));
         Version version = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
         console.println("  Helper lib version: " + (version != null ? version.toString() : "disabled"));
         console.println("  VEnv state: " + (pythonScriptEngineConfiguration.isVEnvEnabled() ? "enabled" : "disabled"));
