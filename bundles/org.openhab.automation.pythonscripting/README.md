@@ -148,17 +148,20 @@ You should also check your logs for a message related to the helper lib deployme
 
 You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
-### User timezone 'XYZ' is different than openhab regional timezone
+### User timezone 'XYZ' is different than openhab regional timezone ...
 
 ![Timezone mismatch](doc/logs_timezone_mismatch.png)
 
-This means that your configuration EXTRA_JAVA_OPTS="-Duser.timezone=XYZ" is different then the one, configured in openHAB regional settings.
+These error happens if timezone settings are provided in several ways and some of them are different.
+
+- Check that your EXTRA_JAVA_OPTS="-Duser.timezone=" setting is matching your openHAB regional setting.
+- Additionally the ENVIRONMENT variable 'TZ', if provided, must match your openHAB regional setting.
 
 e.g. in openHABian this can be changed in /etc/default/openhab
 
 or for containers, this can be provided as a additional environment variable.
 
-### Graal python language not initialized.
+### Graal python language not initialized. ...
 
 This can happen after a new Add-on installation, if JSScripting is active at the same time.
 

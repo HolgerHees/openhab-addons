@@ -73,12 +73,9 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         String defaultTimezone = ZoneId.systemDefault().getId();
         String providerTimezone = timeZoneProvider.getTimeZone().getId();
         if (!defaultTimezone.equals(providerTimezone)) {
-            String msg = """
-                    User timezone '{}' is different than openhab regional timezone '{}'.
-                    Check that your EXTRA_JAVA_OPTS="-Duser.timezone=" setting is matching your openhab regional setting.
-                    Additionally the ENVIRONMENT variable 'TZ', if provided, must match your openhab regional setting.
-                    Python Scripting is running with timezone '{}'.""";
-            logger.warn(msg, defaultTimezone, providerTimezone, defaultTimezone);
+            logger.warn(
+                    "User timezone '{}' is different than openhab regional timezone '{}'. Python Scripting is running with timezone '{}'.",
+                    defaultTimezone, providerTimezone, defaultTimezone);
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
     }
