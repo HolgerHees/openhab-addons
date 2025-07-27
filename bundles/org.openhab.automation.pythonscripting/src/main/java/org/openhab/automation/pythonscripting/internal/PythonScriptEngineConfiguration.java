@@ -284,7 +284,7 @@ public class PythonScriptEngineConfiguration {
 
     private void initPipModules(ScriptEngineFactory factory) {
         String pipModulesConfig = configuration.pipModules.strip();
-        if (pipModulesConfig.isEmpty() || PythonScriptEngine.getLanguage() == null) {
+        if (pipModulesConfig.isEmpty()) {
             return;
         }
 
@@ -312,13 +312,16 @@ public class PythonScriptEngineConfiguration {
                 """;
 
         ScriptEngine engine = factory.createScriptEngine(PythonScriptEngineFactory.SCRIPT_TYPE);
-        engine.getContext().setAttribute("pipModules", pipModules, ScriptContext.ENGINE_SCOPE);
-        try {
-            logger.info("Checking for pip module{} '{}'", pipModules.size() > 1 ? "s" : "", configuration.pipModules);
-            engine.eval(pipCode);
-        } catch (ScriptException e) {
-            logger.warn("Error installing pip module{}", pipModules.size() > 1 ? "s" : "");
-            logger.trace("TRACE:", unwrap(e));
+        if (engine != null) {
+            engine.getContext().setAttribute("pipModules", pipModules, ScriptContext.ENGINE_SCOPE);
+            try {
+                logger.info("Checking for pip module{} '{}'", pipModules.size() > 1 ? "s" : "",
+                        configuration.pipModules);
+                engine.eval(pipCode);
+            } catch (ScriptException e) {
+                logger.warn("Error installing pip module{}", pipModules.size() > 1 ? "s" : "");
+                logger.trace("TRACE:", unwrap(e));
+            }
         }
     }
 
