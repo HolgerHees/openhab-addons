@@ -153,6 +153,14 @@ e.g. in openHABian this can be changed in /etc/default/openhab
 
 or for containers, this can be provided as a additional environment variable.
 
+### Can't install pip modules. VEnv not enabled.
+
+```log
+2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
+```
+
+You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
+
 ### Exception during helper lib initialisation
 
 ```log
@@ -162,14 +170,6 @@ or for containers, this can be provided as a additional environment variable.
 There were problems during the deployment of the helper libs.
 A typical error is an insufficient permission.
 The folder "conf/automation/python/" must be writeable by openHAB.
-
-### Can't install pip modules. VEnv not enabled.
-
-```log
-2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
-```
-
-You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
 ### Failed to inject import wrapper for engine ...
 
