@@ -130,11 +130,19 @@ In container environments, you should mount the 'graalpy' folder to, because the
 
 ### Exception during helper lib initialisation
 
+```log
+2025-07-20 09:15:05.100 [ERROR] [rnal.PythonScriptEngineConfiguration] - Exception during helper lib initialisation
+```
+
 There were problems during the deployment of the helper libs.
 A typical error is an insufficient permission.
 The folder "conf/automation/python/" must be writeable by openHAB.
 
-### Failed to inject import wrapper
+### Failed to inject import wrapper for engine
+
+```log
+2025-07-20 10:01:17.211 [ERROR] [cripting.internal.PythonScriptEngine] - Failed to inject import wrapper for engine
+```
 
 The reading the Python source file "conf/automation/python/lib/openhab/\_\_wrapper\_\_.py" failed.
 
@@ -144,13 +152,17 @@ You should also check your logs for a message related to the helper lib deployme
 
 ### Can't installing pip modules. VEnv not enabled.
 
-![VEnv missing](doc/logs_venv_missing.png)
+```log
+2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
+```
 
 You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
 ### User timezone 'XYZ' is different than openhab regional timezone ...
 
-![Timezone mismatch](doc/logs_timezone_mismatch.png)
+```log
+2025-07-22 09:15:53.705 [WARN ] [g.internal.PythonScriptEngineFactory] - User timezone 'Europe/London' is different than openhab regional timezone 'Europe/Berlin'. Python Scripting is running with timezone 'Europe/London'.
+```
 
 These error happens if timezone settings are provided in several ways and some of them are different.
 
@@ -162,6 +174,10 @@ e.g. in openHABian this can be changed in /etc/default/openhab
 or for containers, this can be provided as a additional environment variable.
 
 ### Graal python language not initialized. ...
+
+```log
+2025-07-25 12:10:06.001 [ERROR] [rnal.PythonScriptEngineConfiguration] - Graal python language not initialized. Restart openhab to initialize available graal languages properly.
+```
 
 This can happen after a new Add-on installation, if JSScripting is active at the same time.
 
