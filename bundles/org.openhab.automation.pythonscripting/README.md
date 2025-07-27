@@ -128,35 +128,15 @@ In container environments, you should mount the 'graalpy' folder to, because the
 
 ## Typical log errors
 
-### Exception during helper lib initialisation
+### Graal python language not initialized. ...
 
 ```log
-2025-07-20 09:15:05.100 [ERROR] [rnal.PythonScriptEngineConfiguration] - Exception during helper lib initialisation
+2025-07-25 12:10:06.001 [ERROR] [g.internal.PythonScriptEngineFactory] - Graal python language not initialized. Restart openhab to initialize available graal languages properly.
 ```
 
-There were problems during the deployment of the helper libs.
-A typical error is an insufficient permission.
-The folder "conf/automation/python/" must be writeable by openHAB.
+This can happen after a new Add-on installation, if JSScripting is active at the same time.
 
-### Failed to inject import wrapper for engine
-
-```log
-2025-07-20 10:01:17.211 [ERROR] [cripting.internal.PythonScriptEngine] - Failed to inject import wrapper for engine
-```
-
-The reading the Python source file "conf/automation/python/lib/openhab/\_\_wrapper\_\_.py" failed.
-
-This could either a permission/owner problem or a problem during deployment of the helper libs.
-You should check that this file exists and it is readable by openHAB.
-You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib".
-
-### Can't installing pip modules. VEnv not enabled.
-
-```log
-2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
-```
-
-You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
+Just restart openhab to initialize available graal languages properly.
 
 ### User timezone 'XYZ' is different than openhab regional timezone ...
 
@@ -173,15 +153,35 @@ e.g. in openHABian this can be changed in /etc/default/openhab
 
 or for containers, this can be provided as a additional environment variable.
 
-### Graal python language not initialized. ...
+### Exception during helper lib initialisation
 
 ```log
-2025-07-25 12:10:06.001 [ERROR] [rnal.PythonScriptEngineConfiguration] - Graal python language not initialized. Restart openhab to initialize available graal languages properly.
+2025-07-20 09:15:05.100 [ERROR] [rnal.PythonScriptEngineConfiguration] - Exception during helper lib initialisation
 ```
 
-This can happen after a new Add-on installation, if JSScripting is active at the same time.
+There were problems during the deployment of the helper libs.
+A typical error is an insufficient permission.
+The folder "conf/automation/python/" must be writeable by openHAB.
 
-Just restart openhab to initialize available graal languages properly.
+### Can't installing pip modules. VEnv not enabled.
+
+```log
+2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
+```
+
+You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
+
+### Failed to inject import wrapper for engine
+
+```log
+2025-07-20 10:01:17.211 [ERROR] [cripting.internal.PythonScriptEngine] - Failed to inject import wrapper for engine
+```
+
+The reading the Python source file "conf/automation/python/lib/openhab/\_\_wrapper\_\_.py" failed.
+
+This could either a permission/owner problem or a problem during deployment of the helper libs.
+You should check that this file exists and it is readable by openHAB.
+You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib".
 
 ## Limitations
 
