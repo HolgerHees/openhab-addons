@@ -163,7 +163,7 @@ There were problems during the deployment of the helper libs.
 A typical error is an insufficient permission.
 The folder "conf/automation/python/" must be writeable by openHAB.
 
-### Can't installing pip modules. VEnv not enabled.
+### Can't install pip modules. VEnv not enabled.
 
 ```log
 2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
@@ -171,7 +171,7 @@ The folder "conf/automation/python/" must be writeable by openHAB.
 
 You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
-### Failed to inject import wrapper for engine
+### Failed to inject import wrapper for engine ...
 
 ```log
 2025-07-20 10:01:17.211 [ERROR] [cripting.internal.PythonScriptEngine] - Failed to inject import wrapper for engine
