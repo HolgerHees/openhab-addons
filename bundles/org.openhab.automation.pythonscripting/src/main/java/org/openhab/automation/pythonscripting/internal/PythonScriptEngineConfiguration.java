@@ -323,7 +323,7 @@ public class PythonScriptEngineConfiguration {
                 logger.trace("TRACE:", unwrap(e));
             }
         } else {
-            logger.warn("Installing pip modules skipped. No script engine available.");
+            logger.warn("Can't installing pip modules. No script engine available.");
         }
     }
 
