@@ -24,7 +24,6 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
-import org.openhab.core.OpenHAB;
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.config.core.ConfigurableService;
@@ -71,27 +70,11 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
         this.language = PythonScriptEngine.getLanguage();
         if (this.language == null) {
-            StringBuilder msg = new StringBuilder().append("""
-                    Graal python language not available.
+            String msg = """
+                    Graal python language not initialized.
                     This can occur after a new Add-on installation, if JSScripting is active at the same time.
 
-                    """);
-            if (this.configuration.getBundleVersion().toString().split("\\.").length > 3) {
-                String configFolder = OpenHAB.getConfigFolder();
-                msg.append("In that case, follow these steps.") //
-                        .append("\n") //
-                        .append("1. Uninstall the current \"Python Scripting Next\" Add-on.\n")
-                        .append("2. Stop openhab.\n")
-                        .append("3. Put \"Python Scripting Next\" Add-on kar file into folder \"").append(configFolder)
-                        .append("/addons/\".\n") //
-                        .append("4. Enable the Add-on in \"").append(configFolder)
-                        .append("/conf/services/addons.cfg\" with an entry like \"automation = pythonscripting\".\n") //
-                        .append("   If JSScripting is enabled too, the entry looks like \"automation = jsscripting,pythonscripting\".\n") //
-                        .append("\n") //
-                        .append("After, just start openhab again to initialize available graal languages properly.");
-            } else {
-                msg.append("Just restart openhab to initialize available graal languages properly.");
-            }
+                    Just restart openhab to initialize available graal languages properly.""";
             logger.error("{}", msg);
         }
 
@@ -133,6 +116,9 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
     @Override
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
         if (!scriptTypes.contains(scriptType) || language == null) {
+            if (language == null) {
+                logger.error("Can't create ScriptEngine. No graal python language initialized.");
+            }
             return null;
         }
         return new PythonScriptEngine(pythonDependencyTracker, configuration);

@@ -117,18 +117,19 @@ public class PythonScriptEngine
 
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
-            .targetTypeMapping(Value.class, ZonedDateTime.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
+            .targetTypeMapping(Value.class, ZonedDateTime.class, v -> v.hasMember("ctime") && v.hasMember("isoformat"),
                     v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
-                            + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : "")),
+                            + (!v.hasMember("tzinfo") || v.getMember("tzinfo").isNull()
+                                    ? OffsetDateTime.now().getOffset().getId()
+                                    : "")),
                     HostAccess.TargetMappingPrecedence.LOW)
 
             // Translate python datetime java.time.Instant
-            .targetTypeMapping(Value.class, Instant.class,
-                    v -> v.hasMember("ctime") && v.hasMember("isoformat") && v.hasMember("tzinfo"),
-                    v -> ZonedDateTime
-                            .parse(v.invokeMember("isoformat").asString()
-                                    + (v.getMember("tzinfo").isNull() ? OffsetDateTime.now().getOffset().getId() : ""))
+            .targetTypeMapping(Value.class, Instant.class, v -> v.hasMember("ctime") && v.hasMember("isoformat"),
+                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
+                            + (!v.hasMember("tzinfo") || v.getMember("tzinfo").isNull()
+                                    ? OffsetDateTime.now().getOffset().getId()
+                                    : ""))
                             .toInstant(),
                     HostAccess.TargetMappingPrecedence.LOW)
 
