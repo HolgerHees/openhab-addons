@@ -158,6 +158,12 @@ e.g. in openHABian this can be changed in /etc/default/openhab
 
 or for containers, this can be provided as a additional environment variable.
 
+### Graal python language not initialized.
+
+This can happen after a new Add-on installation, if JSScripting is active at the same time.
+
+Just restart openhab to initialize available graal languages properly.
+
 ## Limitations
 
 - GraalPy can't handle arguments in constructors of Java objects. Means you can't instantiate a Java object in Python with a parameter. https://github.com/oracle/graalpython/issues/367

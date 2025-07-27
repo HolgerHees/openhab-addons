@@ -69,14 +69,6 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         this.configuration = new PythonScriptEngineConfiguration(config, this);
 
         this.language = PythonScriptEngine.getLanguage();
-        if (this.language == null) {
-            String msg = """
-                    Graal python language not initialized.
-                    This can occur after a new Add-on installation, if JSScripting is active at the same time.
-
-                    Just restart openhab to initialize available graal languages properly.""";
-            logger.error("{}", msg);
-        }
 
         String defaultTimezone = ZoneId.systemDefault().getId();
         String providerTimezone = timeZoneProvider.getTimeZone().getId();
@@ -117,7 +109,8 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
         if (!scriptTypes.contains(scriptType) || language == null) {
             if (language == null) {
-                logger.error("Can't create ScriptEngine. No graal python language initialized.");
+                logger.error(
+                        "Graal python language not initialized. Restart openhab to initialize available graal languages properly.");
             }
             return null;
         }
