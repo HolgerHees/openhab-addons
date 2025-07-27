@@ -289,7 +289,7 @@ public class PythonScriptEngineConfiguration {
         }
 
         if (!isVEnvEnabled()) {
-            logger.error("Can't installing pip modules. VEnv not enabled.");
+            logger.error("Can't install pip modules. VEnv not enabled.");
             return;
         }
 
@@ -323,7 +323,7 @@ public class PythonScriptEngineConfiguration {
                 logger.trace("TRACE:", unwrap(e));
             }
         } else {
-            logger.warn("Can't installing pip modules. No script engine available.");
+            logger.warn("Can't install pip modules. No script engine available.");
         }
     }
 
