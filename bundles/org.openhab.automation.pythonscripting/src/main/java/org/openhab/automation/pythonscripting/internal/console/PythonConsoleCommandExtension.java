@@ -488,51 +488,37 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
      * withFullContext = true => means a full openHAB-managed script engine with scoped variables
      * including any injected required modules.
      */
-    private @Nullable Object executePython(@Nullable Console console, EngineEvalFunction process,
-            boolean withFullContext) {
+    private @Nullable Object executePython(Console console, EngineEvalFunction process, boolean withFullContext) {
         String scriptIdentifier = null;
         try {
             ScriptEngine engine = null;
-            if (console != null) {
-                printLoadingMessage(console, true);
-            }
+            printLoadingMessage(console, true);
 
             if (withFullContext) {
                 scriptIdentifier = "python-console-" + UUID.randomUUID().toString();
                 ScriptEngineContainer container = scriptEngineManager.createScriptEngine(scriptType, scriptIdentifier);
-                if (container == null) {
-                    if (console != null) {
-                        console.println("Error: Unable to create Python script engine.");
-                    }
-                    return null;
+                if (container != null) {
+                    engine = container.getScriptEngine();
                 }
-                engine = container.getScriptEngine();
             } else {
                 engine = pythonScriptEngineFactory.createScriptEngine(scriptType);
             }
 
             if (engine == null) {
-                throw new ScriptException("Unable to create Python script engine.");
+                console.println("Error: Unable to create python script engine.");
+                return null;
             }
 
-            if (console != null) {
-                printLoadingMessage(console, false);
-            }
+            printLoadingMessage(console, false);
 
-            if (console != null) {
-                engine.getContext().setAttribute(PythonScriptEngine.CONTEXT_KEY_ENGINE_LOGGER_INPUT,
-                        createInputStream(console), ScriptContext.ENGINE_SCOPE);
-            }
-
+            engine.getContext().setAttribute(PythonScriptEngine.CONTEXT_KEY_ENGINE_LOGGER_INPUT,
+                    createInputStream(console), ScriptContext.ENGINE_SCOPE);
             engine.getContext().setAttribute(PythonScriptEngine.CONTEXT_KEY_ENGINE_LOGGER_OUTPUT, System.out,
                     ScriptContext.ENGINE_SCOPE);
+
             return process.apply(engine);
         } catch (ScriptException e) {
-            if (console != null) {
-                console.println("Error: " + e.getMessage());
-            } else {
-                logger.warn("Error: {}", e.getMessage());
-            }
+            console.println("Error: " + e.getMessage());
             return null;
         } finally {
             if (scriptIdentifier != null) {

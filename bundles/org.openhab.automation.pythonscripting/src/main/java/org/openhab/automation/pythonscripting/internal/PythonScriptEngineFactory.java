@@ -69,6 +69,10 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
         this.configuration = new PythonScriptEngineConfiguration(config, this);
 
         this.language = PythonScriptEngine.getLanguage();
+        if (this.language == null) {
+            logger.error(
+                    "Graal python language not initialized. Restart openhab to initialize available graal languages properly.");
+        }
 
         String defaultTimezone = ZoneId.systemDefault().getId();
         String providerTimezone = timeZoneProvider.getTimeZone().getId();
@@ -105,10 +109,6 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
     @Override
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
         if (!scriptTypes.contains(scriptType) || language == null) {
-            if (language == null) {
-                logger.error(
-                        "Graal python language not initialized. Restart openhab to initialize available graal languages properly.");
-            }
             return null;
         }
         return new PythonScriptEngine(pythonDependencyTracker, configuration);
