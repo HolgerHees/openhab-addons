@@ -322,6 +322,8 @@ public class PythonScriptEngineConfiguration {
                 logger.warn("Error installing pip module{}", pipModules.size() > 1 ? "s" : "");
                 logger.trace("TRACE:", unwrap(e));
             }
+        } else {
+            logger.warn("Installing pip modules skipped. No script engine available.");
         }
     }
 
