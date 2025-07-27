@@ -284,7 +284,7 @@ public class PythonScriptEngineConfiguration {
 
     private void initPipModules(ScriptEngineFactory factory) {
         String pipModulesConfig = configuration.pipModules.strip();
-        if (pipModulesConfig.isEmpty()) {
+        if (pipModulesConfig.isEmpty() || PythonScriptEngine.getLanguage() == null) {
             return;
         }
 
