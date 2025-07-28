@@ -68,15 +68,11 @@ Check via Web UI => Settings / Add-on Settings / Python Scripting
 
 The [openHAB Console](https://www.openhab.org/docs/administration/console.html) provides access to additional features of these Add-on.
 
-1. `pythonscripting info` is showing you additional data like version numbers, activated features and used path locations
+1. `pythonscripting info` is showing you additional data like version numbers, activated features and used path locations<br/><br/>![Pythonscripting info](doc/console_pythonscripting_info.png)
 
-![Pythonscripting info](doc/console_pythonscripting_info.png)
+2. `pythonscripting console` provides an interactive python console where you can try live python features<br/><br/>![Pythonscripting console](doc/console_pythonscripting_console.png)
 
-2. `pythonscripting console` provides an interactive python console where you can try live python features
-
-![Pythonscripting console](doc/console_pythonscripting_console.png)
-
-3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib<br/>![Pythonscripting update](doc/console_pythonscripting_update.png)
+3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib<br/><br/>![Pythonscripting update](doc/console_pythonscripting_update.png)
 
 4. `pythonscripting pip` allowes you check, install or remove external python modules.<br/><br/>Check [pip usage](#using-pip-to-install-external-modules) for details
 
@@ -124,11 +120,7 @@ In container environments, you should mount the 'graalpy' folder to, because the
 
 As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can use pip in 2 ways.
 
-1. Using the pythonscripting console
-
-![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)
-![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)
-![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
+1. Using the pythonscripting console<br/><br/>![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png) ![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png) ![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
 
 2. Using venv pip on your host system
 
