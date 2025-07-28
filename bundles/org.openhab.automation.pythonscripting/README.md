@@ -88,23 +88,21 @@ VEnv based python runtimes are optional, but needed to provide support for addit
 These values are needed during the next step
 
 2. Download graalpy-community and create venv
+    ```shell
+    # The downloaded graalpy-community tar.gz must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and your "GraalVM version" of openHAB
+    wget -qO- https://github.com/oracle/graalpython/releases/download/graal-24.2.1/graalpy-community-24.2.1-linux-amd64.tar.gz | gunzip | tar xvf -
+    cd graalpy-community-24.2.1-linux-amd64/
 
-```shell
-# The downloaded graalpy-community tar.gz must match your operating system (linux, windows or macos), your architecture (amd64, aarch64) and your "GraalVM version" of openHAB
-wget -qO- https://github.com/oracle/graalpython/releases/download/graal-24.2.1/graalpy-community-24.2.1-linux-amd64.tar.gz | gunzip | tar xvf -
-cd graalpy-community-24.2.1-linux-amd64/
-
-# The venv target dir must match your "VEnv path" of openHAB
-./bin/graalpy -m venv /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
-```
+    # The venv target dir must match your "VEnv path" of openHAB
+    ./bin/graalpy -m venv /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+    ```
 
 3. Install 'patchelf' which is needed for native module support in graalpy (optional).
-
-```
-apt-get install patchelf
-# zypper install patchelf
-# yum install patchelf
-```
+    ```
+    apt-get install patchelf
+    # zypper install patchelf
+    # yum install patchelf
+    ```
 
 After these steps, venv setup is done and will be detected automatically during next openHAB restart.
 
@@ -121,9 +119,9 @@ As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can
 1. Using the pythonscripting console<br/><br/>![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
 
 2. Using venv pip on your host system
-   ```
-   /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
-   ```
+    ```
+    /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+    ```
 
 ## Typical log errors
 
