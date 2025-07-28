@@ -80,11 +80,7 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 ![Pythonscripting update](doc/console_pythonscripting_update.png)
 
-4. `pythonscripting pip` allowes you check, install or remove external python modules<br/>These feature is only available if [VEnv is enabled](#enabling-venv)
-
-![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)
-![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)
-![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
+4. `pythonscripting pip` allowes you check, install or remove external python modules. For details check [VEnv is enabled](#enabling-venv)
 
 ### Enabling VEnv
 
@@ -125,6 +121,22 @@ Theoretically you can create venvs with a native python installation too. But it
 
 In container environments, you should mount the 'graalpy' folder to, because the venv is using symbolik links.
 :::
+
+### Using pip to install external modules
+
+As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can use pip in 2 ways.
+
+1. Using the pythonscripting console
+
+![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)
+![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)
+![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
+
+2. Using venv pip on your host system
+
+```
+/openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+```
 
 ## Typical log errors
 
