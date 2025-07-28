@@ -76,9 +76,7 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 ![Pythonscripting console](doc/console_pythonscripting_console.png)
 
-3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib
-
-![Pythonscripting update](doc/console_pythonscripting_update.png)
+3. `pythonscripting update` allowes you to check, list, update or downgrade your helper lib<br/>![Pythonscripting update](doc/console_pythonscripting_update.png)
 
 4. `pythonscripting pip` allowes you check, install or remove external python modules.<br/><br/>Check [pip usage](#using-pip-to-install-external-modules) for details
 
