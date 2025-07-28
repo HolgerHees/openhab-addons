@@ -80,7 +80,7 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 ![Pythonscripting update](doc/console_pythonscripting_update.png)
 
-4. `pythonscripting pip` allowes you check, install or remove external python modules.<br/>Check [pip usage](#using-pip-to-install-external-modules) for details
+4. `pythonscripting pip` allowes you check, install or remove external python modules.<br/><br/>Check [pip usage](#using-pip-to-install-external-modules) for details
 
 ### Enabling VEnv
 
