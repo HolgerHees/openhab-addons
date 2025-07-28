@@ -120,7 +120,7 @@ In container environments, you should mount the 'graalpy' folder to, because the
 
 As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can use pip in 2 ways.
 
-1. Using the pythonscripting console<br/><br/>![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png) ![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png) ![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
+1. Using the pythonscripting console<br/><br/>![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
 
 2. Using venv pip on your host system
 
