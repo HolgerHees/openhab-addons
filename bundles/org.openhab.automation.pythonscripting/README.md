@@ -120,9 +120,10 @@ As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can
 
 1. Using the pythonscripting console<br/><br/>![Pythonscripting pip install](doc/console_pythonscripting_pip_install.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_list.png)![Pythonscripting pip install](doc/console_pythonscripting_pip_show.png)
 
-2. Using venv pip on your host system<br/><br/>```
-/openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
-```
+2. Using venv pip on your host system
+   ```
+   /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+   ```
 
 ## Typical log errors
 
