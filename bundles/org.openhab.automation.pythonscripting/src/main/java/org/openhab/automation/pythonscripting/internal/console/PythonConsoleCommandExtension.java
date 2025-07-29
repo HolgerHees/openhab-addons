@@ -195,21 +195,22 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     private void info(Console console) {
         console.println("Python Scripting Environment:");
         console.println("======================================");
-        console.println("Runtime:");
-        console.println("  Bundle version: " + pythonScriptEngineConfiguration.getBundleVersion());
-        console.println("  GraalVM version: " + pythonScriptEngineConfiguration.getGraalVersion());
+        console.println("  Runtime:");
+        console.println("    Bundle version: " + pythonScriptEngineConfiguration.getBundleVersion());
+        console.println("    GraalVM version: " + pythonScriptEngineConfiguration.getGraalVersion());
         Language language = PythonScriptEngine.getLanguage();
-        console.println("  Python version: " + (language != null ? language.getVersion() : "unavailable"));
+        console.println("    Python version: " + (language != null ? language.getVersion() : "unavailable"));
         Version version = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
-        console.println("  Helper lib version: " + (version != null ? version.toString() : "disabled"));
-        console.println("  VEnv state: " + (pythonScriptEngineConfiguration.isVEnvEnabled() ? "enabled" : "disabled"));
+        console.println("    Helper lib version: " + (version != null ? version.toString() : "disabled"));
+        console.println(
+                "    VEnv state: " + (pythonScriptEngineConfiguration.isVEnvEnabled() ? "enabled" : "disabled"));
         console.println("");
-        console.println("Directories:");
-        console.println("  Script path: " + scriptFileWatcher.getWatchPath());
+        console.println("  Directories:");
+        console.println("    Script path: " + scriptFileWatcher.getWatchPath());
         Path tempDirectory = pythonScriptEngineConfiguration.getTempDirectory();
-        console.println("  Temp path: " + tempDirectory.toString());
+        console.println("    Temp path: " + tempDirectory.toString());
         Path venvDirectory = pythonScriptEngineConfiguration.getVEnvDirectory();
-        console.println("  VEnv path: " + venvDirectory.toString());
+        console.println("    VEnv path: " + venvDirectory.toString());
 
         console.println("");
         console.println("Python Scripting Add-on Configuration:");
