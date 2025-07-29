@@ -249,17 +249,16 @@ public class PythonScriptEngine
                         + File.pathSeparator + PythonScriptEngineConfiguration.PYTHON_DEFAULT_PATH.toString());
 
         if (this.pythonScriptEngineConfiguration.isVEnvEnabled()) {
-            Path venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable();
-            if (venvExecutable != null) {
-                contextConfig = contextConfig.option(PYTHON_OPTION_EXECUTABLE, venvExecutable.toString());
-                // Path venvPath = this.pythonScriptEngineConfiguration.getVEnvDirectory();
-                // .option(PYTHON_OPTION_PYTHONHOME, venvPath.toString()) //
-                // .option(PYTHON_OPTION_SYSPREFIX, venvPath.toString()) //
+            @SuppressWarnings("null")
+            String venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable().toString();
+            contextConfig = contextConfig.option(PYTHON_OPTION_EXECUTABLE, venvExecutable);
+            // Path venvPath = this.pythonScriptEngineConfiguration.getVEnvDirectory();
+            // .option(PYTHON_OPTION_PYTHONHOME, venvPath.toString()) //
+            // .option(PYTHON_OPTION_SYSPREFIX, venvPath.toString()) //
 
-                if (this.pythonScriptEngineConfiguration.isNativeModulesEnabled()) {
-                    contextConfig = contextConfig.option(PYTHON_OPTION_NATIVEMODULES, Boolean.toString(true)) //
-                            .option(PYTHON_OPTION_ISOLATENATIVEMODULES, Boolean.toString(true));
-                }
+            if (this.pythonScriptEngineConfiguration.isNativeModulesEnabled()) {
+                contextConfig = contextConfig.option(PYTHON_OPTION_NATIVEMODULES, Boolean.toString(true)) //
+                        .option(PYTHON_OPTION_ISOLATENATIVEMODULES, Boolean.toString(true));
             }
         }
 
