@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.automation.pythonscripting.internal.graal;
+package org.openhab.automation.pythonscripting.internal.scriptengine.graal;
 
 import java.util.AbstractMap;
 import java.util.HashMap;
@@ -42,14 +42,6 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
         this.contextBuilder = contextBuilder;
         this.scriptContext = scriptContext;
         this.scriptEngine = scriptEngine;
-    }
-
-    GraalPythonBindings(Context context, ScriptContext scriptContext, ScriptEngine scriptEngine) {
-        this.context = context;
-        this.scriptContext = scriptContext;
-        this.scriptEngine = scriptEngine;
-
-        initGlobal();
     }
 
     private void requireContext() {

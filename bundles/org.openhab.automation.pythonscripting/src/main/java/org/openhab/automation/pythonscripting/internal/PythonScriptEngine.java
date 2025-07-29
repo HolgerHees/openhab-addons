@@ -51,15 +51,15 @@ import org.graalvm.polyglot.Language;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
+import org.openhab.automation.pythonscripting.internal.context.ContextInput;
+import org.openhab.automation.pythonscripting.internal.context.ContextOutput;
+import org.openhab.automation.pythonscripting.internal.context.ContextOutputLogger;
 import org.openhab.automation.pythonscripting.internal.fs.DelegatingFileSystem;
-import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
-import org.openhab.automation.pythonscripting.internal.graal.GraalPythonScriptEngine;
+import org.openhab.automation.pythonscripting.internal.fs.PythonDependencyTracker;
+import org.openhab.automation.pythonscripting.internal.provider.LifecycleTracker;
+import org.openhab.automation.pythonscripting.internal.provider.ScriptExtensionModuleProvider;
 import org.openhab.automation.pythonscripting.internal.scriptengine.InvocationInterceptingScriptEngineWithInvocableAndCompilableAndAutoCloseable;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextInput;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextOutput;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.ContextOutputLogger;
-import org.openhab.automation.pythonscripting.internal.scriptengine.helper.LifecycleTracker;
-import org.openhab.automation.pythonscripting.internal.wrapper.ScriptExtensionModuleProvider;
+import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine;
 import org.openhab.core.automation.module.script.ScriptExtensionAccessor;
 import org.openhab.core.items.Item;
 import org.slf4j.Logger;
@@ -106,7 +106,7 @@ public class PythonScriptEngine
     public static final String LOGGER_INIT_NAME = "__logger_init__";
 
     /** Shared Polyglot {@link Engine} across all instances of {@link PythonScriptEngine} */
-    private static Engine ENGINE = Engine.newBuilder()
+    private static Engine engine = Engine.newBuilder()
             // disable warning about fallback runtime (is only available in graalvm)
             .option(PYTHON_OPTION_ENGINE_WARNINTERPRETERONLY, Boolean.toString(false)).build();
 
@@ -175,14 +175,16 @@ public class PythonScriptEngine
      */
     public PythonScriptEngine(PythonDependencyTracker pythonDependencyTracker,
             PythonScriptEngineConfiguration pythonScriptEngineConfiguration) {
+        super(null);
+
         this.pythonScriptEngineConfiguration = pythonScriptEngineConfiguration;
 
-        scriptOutputStream = new ContextOutput(new ContextOutputLogger(logger, Level.INFO));
-        scriptErrorStream = new ContextOutput(new ContextOutputLogger(logger, Level.ERROR));
-        scriptInputStream = new ContextInput(System.in);
+        this.scriptOutputStream = new ContextOutput(new ContextOutputLogger(logger, Level.INFO));
+        this.scriptErrorStream = new ContextOutput(new ContextOutputLogger(logger, Level.ERROR));
+        this.scriptInputStream = new ContextInput(null);
 
-        lifecycleTracker = new LifecycleTracker();
-        scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
+        this.lifecycleTracker = new LifecycleTracker();
+        this.scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
 
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .out(scriptOutputStream) //
@@ -248,14 +250,16 @@ public class PythonScriptEngine
 
         if (this.pythonScriptEngineConfiguration.isVEnvEnabled()) {
             Path venvExecutable = this.pythonScriptEngineConfiguration.getVEnvExecutable();
-            contextConfig = contextConfig.option(PYTHON_OPTION_EXECUTABLE, venvExecutable.toString());
-            // Path venvPath = this.pythonScriptEngineConfiguration.getVEnvDirectory();
-            // .option(PYTHON_OPTION_PYTHONHOME, venvPath.toString()) //
-            // .option(PYTHON_OPTION_SYSPREFIX, venvPath.toString()) //
+            if (venvExecutable != null) {
+                contextConfig = contextConfig.option(PYTHON_OPTION_EXECUTABLE, venvExecutable.toString());
+                // Path venvPath = this.pythonScriptEngineConfiguration.getVEnvDirectory();
+                // .option(PYTHON_OPTION_PYTHONHOME, venvPath.toString()) //
+                // .option(PYTHON_OPTION_SYSPREFIX, venvPath.toString()) //
 
-            if (this.pythonScriptEngineConfiguration.isNativeModulesEnabled()) {
-                contextConfig = contextConfig.option(PYTHON_OPTION_NATIVEMODULES, Boolean.toString(true)) //
-                        .option(PYTHON_OPTION_ISOLATENATIVEMODULES, Boolean.toString(true));
+                if (this.pythonScriptEngineConfiguration.isNativeModulesEnabled()) {
+                    contextConfig = contextConfig.option(PYTHON_OPTION_NATIVEMODULES, Boolean.toString(true)) //
+                            .option(PYTHON_OPTION_ISOLATENATIVEMODULES, Boolean.toString(true));
+                }
             }
         }
 
@@ -268,7 +272,7 @@ public class PythonScriptEngine
                     .option(PYTHON_OPTION_CHECKHASHPYCSMODE, "never");
         }
 
-        delegate = GraalPythonScriptEngine.create(ENGINE, contextConfig);
+        this.delegate = GraalPythonScriptEngine.create(engine, contextConfig);
     }
 
     @Override
@@ -294,6 +298,7 @@ public class PythonScriptEngine
                 throw new IllegalStateException("Failed to retrieve script extension accessor from engine bindings");
             }
 
+            @SuppressWarnings("unchecked")
             Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
                     .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
             if (scriptDependencyListener == null) {
@@ -544,6 +549,6 @@ public class PythonScriptEngine
     }
 
     public static @Nullable Language getLanguage() {
-        return ENGINE.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
+        return engine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
     }
 }

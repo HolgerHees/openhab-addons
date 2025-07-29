@@ -43,7 +43,7 @@ import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
-import org.openhab.automation.pythonscripting.internal.fs.watch.PythonScriptFileWatcher;
+import org.openhab.automation.pythonscripting.internal.fs.PythonScriptFileWatcher;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
 import org.openhab.core.config.core.ConfigDescription;
@@ -57,8 +57,6 @@ import org.openhab.core.io.console.extensions.ConsoleCommandExtension;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -73,8 +71,6 @@ import com.google.gson.JsonParser;
 @NonNullByDefault
 @Component(service = ConsoleCommandExtension.class)
 public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtension implements ConsoleCommandCompleter {
-    private final Logger logger = LoggerFactory.getLogger(PythonConsoleCommandExtension.class);
-
     private static final String UPDATE_RELEASES_URL = "https://api.github.com/repos/openhab/openhab-python/releases";
     private static final String UPDATE_LATEST_URL = "https://api.github.com/repos/openhab/openhab-python/releases/latest";
 
@@ -532,6 +528,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             byte @Nullable [] buffer = null;
             int pos = 0;
 
+            @SuppressWarnings("null")
             @Override
             public int read() throws IOException {
                 if (pos < 0) {

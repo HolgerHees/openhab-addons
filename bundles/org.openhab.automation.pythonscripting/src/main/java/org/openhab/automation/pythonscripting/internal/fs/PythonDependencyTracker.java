@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.automation.pythonscripting.internal.fs.watch;
+package org.openhab.automation.pythonscripting.internal.fs;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;

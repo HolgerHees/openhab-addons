@@ -10,40 +10,42 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.automation.pythonscripting.internal.scriptengine.helper;
+package org.openhab.automation.pythonscripting.internal.context;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
+
+import org.eclipse.jdt.annotation.NonNullByDefault;
 
 /**
  * ContextOutput implementation
  *
  * @author Holger Hees - Initial contribution
  */
-public class ContextInput extends InputStream {
-    private InputStream stream;
+@NonNullByDefault
+public class ContextOutput extends OutputStream {
+    private OutputStream stream;
 
-    public ContextInput(InputStream stream) {
+    public ContextOutput(OutputStream stream) {
         this.stream = stream;
     }
 
-    public void setInputStream(InputStream stream) {
+    public void setOutputStream(OutputStream stream) {
         this.stream = stream;
     }
 
     @Override
     public void close() throws IOException {
-        if (stream == null) {
-            return;
-        }
         stream.close();
     }
 
     @Override
-    public int read() throws IOException {
-        if (stream == null) {
-            return -1;
-        }
-        return stream.read();
+    public void flush() throws IOException {
+        stream.flush();
+    }
+
+    @Override
+    public void write(int b) throws IOException {
+        stream.write(b);
     }
 }

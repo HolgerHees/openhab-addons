@@ -10,7 +10,7 @@
  *
  * SPDX-License-Identifier: EPL-2.0
  */
-package org.openhab.automation.pythonscripting.internal.graal;
+package org.openhab.automation.pythonscripting.internal.scriptengine.graal;
 
 import java.util.List;
 import java.util.Objects;

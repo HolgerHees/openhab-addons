@@ -33,6 +33,10 @@ import javax.script.ScriptException;
 public abstract class InvocationInterceptingScriptEngineWithInvocableAndCompilableAndAutoCloseable<T extends ScriptEngine & Invocable & Compilable & AutoCloseable>
         extends DelegatingScriptEngineWithInvocableAndCompilableAndAutocloseable<T> {
 
+    protected InvocationInterceptingScriptEngineWithInvocableAndCompilableAndAutoCloseable(T delegate) {
+        super(delegate);
+    }
+
     protected String beforeInvocation(String source) {
         beforeInvocation();
         return source;

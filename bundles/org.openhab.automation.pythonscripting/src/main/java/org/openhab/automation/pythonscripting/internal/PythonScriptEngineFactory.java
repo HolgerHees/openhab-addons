@@ -23,7 +23,7 @@ import javax.script.ScriptEngine;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Language;
-import org.openhab.automation.pythonscripting.internal.fs.watch.PythonDependencyTracker;
+import org.openhab.automation.pythonscripting.internal.fs.PythonDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.config.core.ConfigurableService;

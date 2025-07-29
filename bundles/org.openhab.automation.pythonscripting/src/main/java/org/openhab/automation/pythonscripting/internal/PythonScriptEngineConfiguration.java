@@ -347,6 +347,7 @@ public class PythonScriptEngineConfiguration {
                 Matcher currentMatcher = VERSION_PATTERN.matcher(content);
                 if (currentMatcher.find()) {
                     installedHelperLibVersion = Version.parse(currentMatcher.group(1));
+                    @SuppressWarnings("null")
                     int compareResult = installedHelperLibVersion.compareTo(providedHelperLibVersion);
                     if (compareResult >= 0) {
                         if (compareResult > 0) {
@@ -380,13 +381,17 @@ public class PythonScriptEngineConfiguration {
                     URL resourceFile = resourceFiles.nextElement();
                     String resourcePath = resourceFile.getPath();
 
-                    try (InputStream is = PythonScriptEngineConfiguration.class.getClassLoader()
-                            .getResourceAsStream(resourcePath)) {
-                        Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
-                                .resolve(resourcePath.substring(resourcePath.lastIndexOf(RESOURCE_SEPARATOR) + 1));
+                    ClassLoader clsLoader = PythonScriptEngineConfiguration.class.getClassLoader();
+                    if (clsLoader != null) {
+                        try (InputStream is = clsLoader.getResourceAsStream(resourcePath)) {
+                            Path target = PythonScriptEngineConfiguration.PYTHON_OPENHAB_LIB_PATH
+                                    .resolve(resourcePath.substring(resourcePath.lastIndexOf(RESOURCE_SEPARATOR) + 1));
 
-                        Files.copy(is, target);
-                        initFile(target);
+                            Files.copy(is, target);
+                            initFile(target);
+                        }
+                    } else {
+                        throw new IllegalArgumentException("Class loader is null");
                     }
                 }
 
