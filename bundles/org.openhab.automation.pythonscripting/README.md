@@ -183,7 +183,7 @@ This could either a permission/owner problem or a problem during deployment of t
 You should check that this file exists and it is readable by openHAB.
 You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib".
 
-### SystemError, Option python.NativeModules is set to 'true' ...
+### SystemError, Option python.NativeModules is set to 'true' and a second GraalPy context ...
 
 ```log
 SystemError, Option python.NativeModules is set to 'true' and a second GraalPy context attempted to load a native module '<xyz>' from path '<lib_path>.so'. At least one context in this process runs with 'IsolateNativeModules' set to false. Depending on the order of context creation, this means some contexts in the process cannot use native module, all other contexts must fall back and set python.NativeModules to 'false' to run native extensions in LLVM mode. This is recommended only for extensions included in the Python standard library. Running a 3rd party extension in LLVM mode requires a custom build of the extension and is generally discouraged due to compatibility reasons.
