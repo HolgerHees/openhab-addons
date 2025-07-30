@@ -115,6 +115,8 @@ public class PythonScriptEngine
         System.getProperties().setProperty(SYSTEM_PROPERTY_ATTACH_LIBRARY_FAILURE_ACTION, "ignore");
     }
 
+    // private static final boolean isPosix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
             .targetTypeMapping(Value.class, ZonedDateTime.class, v -> v.hasMember("ctime") && v.hasMember("isoformat"),
@@ -192,7 +194,8 @@ public class PythonScriptEngine
                 .in(scriptInputStream) //
                 .allowIO(IOAccess.newBuilder() //
                         .allowHostSocketAccess(true) //
-                        .fileSystem(new DelegatingFileSystem(FileSystems.getDefault().provider()) {
+                        .fileSystem(new DelegatingFileSystem(FileSystems.getDefault().provider(),
+                                pythonScriptEngineConfiguration.getTempDirectory()) {
                             @Override
                             public void checkAccess(Path path, Set<? extends AccessMode> modes,
                                     LinkOption... linkOptions) throws IOException {
@@ -205,17 +208,6 @@ public class PythonScriptEngine
                                     }
                                 }
                                 super.checkAccess(path, modes, linkOptions);
-                            }
-
-                            @Override
-                            public Path getTempDirectory() {
-                                return pythonScriptEngineConfiguration.getTempDirectory();
-                            }
-
-                            @Override
-                            public void setAttribute(Path path, String attribute, Object value, LinkOption... options)
-                                    throws IOException {
-                                Files.setAttribute(path, attribute, value, options);
                             }
                         }).build()) //
                 .allowHostAccess(HOST_ACCESS) //
