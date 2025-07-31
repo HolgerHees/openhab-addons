@@ -145,7 +145,7 @@ Just restart openhab to initialize available graal languages properly.
 javax.script.ScriptException: org.graalvm.polyglot.PolyglotException: Context execution was cancelled.
 ```
 
-This error typical happens, after a binding update and indicates usage of outdatet graal contexts
+This error typical happens, after am Add-on update and indicates usage of outdated graal contexts
 
 Just restart openhab to initialize all contexts again.
 
