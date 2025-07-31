@@ -123,7 +123,7 @@ As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can
 2. Using venv pip on your host system
 
     ```
-    /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv
+    /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests
     ```
 
 ## Typical log errors
