@@ -46,6 +46,7 @@ import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Language;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
 import org.graalvm.polyglot.io.IOAccess;
@@ -247,7 +248,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     }
 
     @Override
-    protected void beforeInvocation() {
+    protected void beforeInvocation() throws PolyglotException {
         lock.lock();
         logger.debug("Lock acquired before invocation for engine '{}'", this.engineIdentifier);
 

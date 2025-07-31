@@ -16,7 +16,6 @@ import java.lang.reflect.UndeclaredThrowableException;
 
 import javax.script.CompiledScript;
 import javax.script.ScriptContext;
-import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
 import org.eclipse.jdt.annotation.NonNull;
@@ -30,7 +29,7 @@ import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalP
  * @author Holger Hees - Initial contribution
  */
 public abstract class InvocationInterceptingPythonScriptEngine extends GraalPythonScriptEngine {
-    protected abstract void beforeInvocation();
+    protected abstract void beforeInvocation() throws PolyglotException;
 
     protected abstract String beforeInvocation(String source);
 
@@ -88,7 +87,7 @@ public abstract class InvocationInterceptingPythonScriptEngine extends GraalPyth
     public CompiledScript compile(String s) throws ScriptException {
         try {
             beforeInvocation();
-            return wrapCompiledScript((CompiledScript) afterInvocation(super.compile(beforeInvocation(s))));
+            return (CompiledScript) afterInvocation(super.compile(beforeInvocation(s)));
         } catch (ScriptException e) {
             throw afterThrowsInvocation(e);
         } catch (PolyglotException e) {
@@ -96,19 +95,5 @@ public abstract class InvocationInterceptingPythonScriptEngine extends GraalPyth
         } catch (Exception e) {
             throw new UndeclaredThrowableException(afterThrowsInvocation(e)); // Wrap and rethrow other exceptions
         }
-    }
-
-    private CompiledScript wrapCompiledScript(CompiledScript script) {
-        return new CompiledScript() {
-            @Override
-            public ScriptEngine getEngine() {
-                return InvocationInterceptingPythonScriptEngine.this;
-            }
-
-            @Override
-            public Object eval(ScriptContext context) throws ScriptException {
-                return script.eval(context);
-            }
-        };
     }
 }
