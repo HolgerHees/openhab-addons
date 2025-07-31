@@ -180,7 +180,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
         this.lifecycleTracker = new LifecycleTracker();
         this.scriptExtensionModuleProvider = new ScriptExtensionModuleProvider();
 
-        this.delegatingFileSystem = new DelegatingFileSystem(this.pythonScriptEngineConfiguration.getTempDirectory());
+        this.delegatingFileSystem = new DelegatingFileSystem(pythonScriptEngineConfiguration.getTempDirectory());
 
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
                 .engine(engine) //
