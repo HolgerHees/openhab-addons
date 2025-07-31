@@ -74,7 +74,7 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
      * throw an {@link IllegalStateException}.
      */
     @Override
-    public void close() {
+    public void close() throws PolyglotException, IllegalStateException {
         logger.debug("GraalPythonScriptEngine closed");
 
         // "true" to get an exception if something is still running in context
