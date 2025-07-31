@@ -85,7 +85,6 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         } catch (PolyglotException e) {
             throw toScriptException(e);
         }
-
     }
 
     @Override
