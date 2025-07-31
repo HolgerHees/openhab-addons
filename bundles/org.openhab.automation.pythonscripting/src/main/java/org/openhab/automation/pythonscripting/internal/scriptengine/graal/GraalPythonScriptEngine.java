@@ -28,7 +28,6 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
 import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
@@ -42,16 +41,15 @@ import org.slf4j.LoggerFactory;
  * @author Holger Hees - Initial contribution
  * @author Jeff James - Initial contribution
  */
-public final class GraalPythonScriptEngine extends AbstractScriptEngine
+public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         implements Compilable, Invocable, AutoCloseable {
-
-    public static final String LANGUAGE_ID = "python";
 
     private final Logger logger = LoggerFactory.getLogger(GraalPythonScriptEngine.class);
 
-    private final GraalPythonScriptEngineFactory factory;
-    private final Context.Builder contextConfig;
-    private final GraalPythonBindings bindings;
+    public static final String LANGUAGE_ID = "python";
+
+    private GraalPythonScriptEngineFactory factory;
+    private GraalPythonBindings bindings;
 
     /**
      * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
@@ -59,18 +57,16 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
      * @param engine the engine to be used for context configurations
      * @param contextConfig a base configuration to create new context instances
      */
-    public static GraalPythonScriptEngine create(Engine engine, Context.Builder contextConfig) {
-        return new GraalPythonScriptEngine(new GraalPythonScriptEngineFactory(engine, contextConfig), engine,
-                contextConfig);
-    }
-
-    GraalPythonScriptEngine(GraalPythonScriptEngineFactory factory, Engine engine, Context.Builder contextConfig) {
+    protected void init(Context.Builder contextConfig, ScriptEngineProvider scriptEngineProvider) {
         logger.debug("GraalPythonScriptEngine created");
 
-        this.factory = factory;
-        this.contextConfig = contextConfig.engine(engine);
-        this.bindings = new GraalPythonBindings(this.contextConfig, this.context, this);
+        this.bindings = new GraalPythonBindings(contextConfig, this.context, this);
+        this.factory = new GraalPythonScriptEngineFactory(this.getPolyglotContext().getEngine(), scriptEngineProvider);
         this.context.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+    }
+
+    protected Context getPolyglotContext() {
+        return bindings.getContext();
     }
 
     /**
@@ -85,19 +81,9 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
         getPolyglotContext().close(true);
     }
 
-    /**
-     * Returns the polyglot engine associated with this script engine.
-     */
-    public Engine getPolyglotEngine() {
-        return factory.getPolyglotEngine();
-    }
-
-    public Context getPolyglotContext() {
-        return bindings.getContext();
-    }
-
-    static Value evalInternal(Context context, String script) {
-        return context.eval(Source.newBuilder(LANGUAGE_ID, script, "internal-script").internal(true).buildLiteral());
+    @Override
+    public GraalPythonScriptEngineFactory getFactory() {
+        return factory;
     }
 
     @Override
@@ -114,15 +100,15 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
 
     @Override
     public Object eval(Reader reader, ScriptContext ctxt) throws ScriptException {
-        return eval(createSource(read(reader), ctxt), ctxt);
+        return eval(read(reader), ctxt);
     }
 
     @Override
     public Object eval(String script, ScriptContext ctxt) throws ScriptException {
-        return eval(createSource(script, ctxt), ctxt);
+        return eval(createSource(script, ctxt));
     }
 
-    private Object eval(Source source, ScriptContext scriptContext) throws ScriptException {
+    private Object eval(Source source) throws ScriptException {
         try {
             return getPolyglotContext().eval(source).as(Object.class);
         } catch (PolyglotException e) {
@@ -131,25 +117,20 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     }
 
     @Override
-    public GraalPythonScriptEngineFactory getFactory() {
-        return factory;
-    }
-
-    @Override
     public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
         if (thiz == null) {
             throw new IllegalArgumentException("thiz is not a valid object.");
         }
 
-        Value thisValue = getPolyglotContext().asValue(thiz);
-        if (!thisValue.canInvokeMember(name)) {
-            if (!thisValue.hasMember(name)) {
-                throw noSuchMethod(name);
-            } else {
-                throw notCallable(name);
-            }
-        }
         try {
+            Value thisValue = getPolyglotContext().asValue(thiz);
+            if (!thisValue.canInvokeMember(name)) {
+                if (!thisValue.hasMember(name)) {
+                    throw new NoSuchMethodException(name);
+                } else {
+                    throw new NoSuchMethodException(name + " is not a function");
+                }
+            }
             return thisValue.invokeMember(name, args).as(Object.class);
         } catch (PolyglotException e) {
             throw toScriptException(e);
@@ -158,13 +139,13 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
 
     @Override
     public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
-        Value function = getPolyglotContext().getBindings(LANGUAGE_ID).getMember(name);
-        if (function == null) {
-            throw noSuchMethod(name);
-        } else if (!function.canExecute()) {
-            throw notCallable(name);
-        }
         try {
+            Value function = getPolyglotContext().getBindings(LANGUAGE_ID).getMember(name);
+            if (function == null) {
+                throw new NoSuchMethodException(name);
+            } else if (!function.canExecute()) {
+                throw new NoSuchMethodException(name + " is not a function");
+            }
             return function.execute(args).as(Object.class);
         } catch (PolyglotException e) {
             throw toScriptException(e);
@@ -189,23 +170,14 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
     }
 
     @Override
-    public CompiledScript compile(String script) throws ScriptException {
-        Source source = createSource(script, getContext());
-        return compile(this, source);
+    public CompiledScript compile(Reader reader) throws ScriptException {
+        return compile(read(reader));
     }
 
     @Override
-    public CompiledScript compile(Reader reader) throws ScriptException {
-        Source source = createSource(read(reader), getContext());
+    public CompiledScript compile(String script) throws ScriptException {
+        Source source = createSource(script, getContext());
         return compile(this, source);
-    }
-
-    private static NoSuchMethodException noSuchMethod(String name) throws NoSuchMethodException {
-        throw new NoSuchMethodException(name);
-    }
-
-    private static NoSuchMethodException notCallable(String name) throws NoSuchMethodException {
-        throw new NoSuchMethodException(name + " is not a function");
     }
 
     private static CompiledScript compile(GraalPythonScriptEngine thiz, Source source) throws ScriptException {
@@ -224,7 +196,7 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
 
             @Override
             public Object eval(ScriptContext ctx) throws ScriptException {
-                return thiz.eval(source, ctx);
+                return thiz.eval(source);
             }
         };
     }
@@ -332,5 +304,13 @@ public final class GraalPythonScriptEngine extends AbstractScriptEngine
             }
         }
         return sex;
+    }
+
+    private static Value evalInternal(Context context, String script) {
+        return context.eval(Source.newBuilder(LANGUAGE_ID, script, "internal-script").internal(true).buildLiteral());
+    }
+
+    public static interface ScriptEngineProvider {
+        ScriptEngine createScriptEngine();
     }
 }

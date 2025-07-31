@@ -18,10 +18,9 @@ import java.util.Objects;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineFactory;
 
-import org.graalvm.polyglot.Context;
-import org.graalvm.polyglot.Context.Builder;
 import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.Language;
+import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine.ScriptEngineProvider;
 
 /**
  * A Graal.Python implementation of the script engine factory to exposes metadata describing of the engine class.
@@ -37,11 +36,11 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
 
     private final Engine engine;
     private final Language language;
-    private Builder contextConfig;
+    private ScriptEngineProvider scriptEngineProvider;
 
-    public GraalPythonScriptEngineFactory(Engine engine, Context.Builder contextConfig) {
+    public GraalPythonScriptEngineFactory(Engine engine, ScriptEngineProvider scriptEngineProvider) {
         this.engine = engine;
-        this.contextConfig = contextConfig;
+        this.scriptEngineProvider = scriptEngineProvider;
         this.language = this.engine.getLanguages().get(GraalPythonScriptEngine.LANGUAGE_ID);
     }
 
@@ -97,8 +96,8 @@ public final class GraalPythonScriptEngineFactory implements ScriptEngineFactory
     }
 
     @Override
-    public GraalPythonScriptEngine getScriptEngine() {
-        return new GraalPythonScriptEngine(this, engine, contextConfig);
+    public ScriptEngine getScriptEngine() {
+        return scriptEngineProvider.createScriptEngine();
     }
 
     @Override

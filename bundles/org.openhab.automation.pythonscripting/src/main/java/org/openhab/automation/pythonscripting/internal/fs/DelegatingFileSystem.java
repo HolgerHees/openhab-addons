@@ -18,6 +18,7 @@ import java.nio.channels.SeekableByteChannel;
 import java.nio.file.AccessMode;
 import java.nio.file.CopyOption;
 import java.nio.file.DirectoryStream;
+import java.nio.file.FileSystems;
 import java.nio.file.LinkOption;
 import java.nio.file.OpenOption;
 import java.nio.file.Path;
@@ -26,6 +27,7 @@ import java.nio.file.attribute.FileAttribute;
 import java.nio.file.spi.FileSystemProvider;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 
 import org.graalvm.polyglot.io.FileSystem;
 
@@ -39,12 +41,18 @@ public class DelegatingFileSystem implements FileSystem {
     // https://github.com/oracle/graal/blob/master/truffle/src/com.oracle.truffle.polyglot/src/com/oracle/truffle/polyglot/FileSystems.java
     private FileSystemProvider delegate;
 
-    private volatile Path userDir;
-    private volatile Path tmpDir;
+    private Path userDir;
+    private Path tmpDir;
 
-    public DelegatingFileSystem(FileSystemProvider delegate, Path tmpDir) {
-        this.delegate = delegate;
+    private Consumer<Path> consumer = null;
+
+    public DelegatingFileSystem(Path tmpDir) {
+        this.delegate = FileSystems.getDefault().provider();
         this.tmpDir = tmpDir;
+    }
+
+    public void setAccessConsumer(Consumer<Path> consumer) {
+        this.consumer = consumer;
     }
 
     @Override
@@ -59,6 +67,9 @@ public class DelegatingFileSystem implements FileSystem {
 
     @Override
     public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
+        if (consumer != null) {
+            consumer.accept(path);
+        }
         delegate.checkAccess(path, modes.toArray(new AccessMode[0]));
     }
 

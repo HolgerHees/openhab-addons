@@ -24,6 +24,7 @@ import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.fs.PythonDependencyTracker;
+import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine.ScriptEngineProvider;
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.config.core.ConfigurableService;
@@ -48,7 +49,7 @@ import org.slf4j.LoggerFactory;
         property = Constants.SERVICE_PID + "=org.openhab.automation.pythonscripting")
 @ConfigurableService(category = "automation", label = "Python Scripting", description_uri = PythonScriptEngineFactory.CONFIG_DESCRIPTION_URI)
 @NonNullByDefault
-public class PythonScriptEngineFactory implements ScriptEngineFactory {
+public class PythonScriptEngineFactory implements ScriptEngineFactory, ScriptEngineProvider {
     private final Logger logger = LoggerFactory.getLogger(PythonScriptEngineFactory.class);
 
     public static final String CONFIG_DESCRIPTION_URI = "automation:pythonscripting";
@@ -108,10 +109,18 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory {
 
     @Override
     public @Nullable ScriptEngine createScriptEngine(String scriptType) {
-        if (!scriptTypes.contains(scriptType) || language == null) {
+        if (!scriptTypes.contains(scriptType)) {
             return null;
         }
-        return new PythonScriptEngine(pythonDependencyTracker, configuration);
+        return createScriptEngine();
+    }
+
+    @Override
+    public @Nullable ScriptEngine createScriptEngine() {
+        if (language == null) {
+            return null;
+        }
+        return new PythonScriptEngine(configuration, this);
     }
 
     @Override
