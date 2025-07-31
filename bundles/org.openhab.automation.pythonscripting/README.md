@@ -138,6 +138,17 @@ This can happen after a new Add-on installation, if JSScripting is active at the
 
 Just restart openhab to initialize available graal languages properly.
 
+### ScriptException: org.graalvm.polyglot.PolyglotException: Context execution was cancelled.
+
+```log
+2025-07-31 15:52:10.955 [ERROR] [ipt.internal.ScriptEngineManagerImpl] - Error while executing script
+javax.script.ScriptException: org.graalvm.polyglot.PolyglotException: Context execution was cancelled.
+```
+
+This error typical happens, after a binding update and indicates usage of outdatet graal contexts
+
+Just restart openhab to initialize all contexts again.
+
 ### User timezone 'XYZ' is different than openhab regional timezone ...
 
 ```log

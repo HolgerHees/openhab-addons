@@ -12,7 +12,6 @@
  */
 package org.openhab.automation.pythonscripting.internal.scriptengine;
 
-import java.io.Reader;
 import java.lang.reflect.UndeclaredThrowableException;
 
 import javax.script.CompiledScript;
@@ -20,6 +19,8 @@ import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
+import org.eclipse.jdt.annotation.NonNull;
+import org.graalvm.polyglot.PolyglotException;
 import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine;
 
 /**
@@ -29,47 +30,38 @@ import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalP
  * @author Holger Hees - Initial contribution
  */
 public abstract class InvocationInterceptingPythonScriptEngine extends GraalPythonScriptEngine {
+    protected abstract void beforeInvocation();
 
-    protected String beforeInvocation(String source) {
-        beforeInvocation();
-        return source;
-    }
+    protected abstract String beforeInvocation(String source);
 
-    protected Reader beforeInvocation(Reader reader) {
-        beforeInvocation();
-        return reader;
-    }
+    protected abstract Object afterInvocation(Object obj);
 
-    abstract protected void beforeInvocation();
-
-    abstract protected Object afterInvocation(Object obj);
-
-    abstract protected <E extends Exception> E afterThrowsInvocation(E e);
+    protected abstract <E extends Exception> E afterThrowsInvocation(@NonNull E e);
 
     @Override
     public Object eval(String s, ScriptContext scriptContext) throws ScriptException {
         try {
+            beforeInvocation();
             return afterInvocation(super.eval(beforeInvocation(s), scriptContext));
-        } catch (ScriptException se) {
-            throw afterThrowsInvocation(se);
+        } catch (ScriptException e) {
+            throw afterThrowsInvocation(e);
+        } catch (PolyglotException e) {
+            throw afterThrowsInvocation(toScriptException(e));
         } catch (Exception e) {
             throw new UndeclaredThrowableException(afterThrowsInvocation(e)); // Wrap and rethrow other exceptions
         }
     }
 
     @Override
-    public Object invokeMethod(Object o, String s, Object... objects)
-            throws ScriptException, NoSuchMethodException, NullPointerException, IllegalArgumentException {
+    public Object invokeMethod(Object o, String s, Object... objects) throws ScriptException, NoSuchMethodException {
         try {
             beforeInvocation();
             return afterInvocation(super.invokeMethod(o, s, objects));
         } catch (ScriptException e) {
             throw afterThrowsInvocation(e);
+        } catch (PolyglotException e) {
+            throw afterThrowsInvocation(toScriptException(e));
         } catch (NoSuchMethodException e) {
-            throw afterThrowsInvocation(e);
-        } catch (NullPointerException e) {
-            throw afterThrowsInvocation(e);
-        } catch (IllegalArgumentException e) {
             throw afterThrowsInvocation(e);
         } catch (Exception e) {
             throw new UndeclaredThrowableException(afterThrowsInvocation(e)); // Wrap and rethrow other exceptions
@@ -77,16 +69,15 @@ public abstract class InvocationInterceptingPythonScriptEngine extends GraalPyth
     }
 
     @Override
-    public Object invokeFunction(String s, Object... objects)
-            throws ScriptException, NoSuchMethodException, NullPointerException {
+    public Object invokeFunction(String s, Object... objects) throws ScriptException, NoSuchMethodException {
         try {
             beforeInvocation();
             return afterInvocation(super.invokeFunction(s, objects));
         } catch (ScriptException e) {
             throw afterThrowsInvocation(e);
+        } catch (PolyglotException e) {
+            throw afterThrowsInvocation(toScriptException(e));
         } catch (NoSuchMethodException e) {
-            throw afterThrowsInvocation(e);
-        } catch (NullPointerException e) {
             throw afterThrowsInvocation(e);
         } catch (Exception e) {
             throw new UndeclaredThrowableException(afterThrowsInvocation(e)); // Wrap and rethrow other exceptions
@@ -96,9 +87,12 @@ public abstract class InvocationInterceptingPythonScriptEngine extends GraalPyth
     @Override
     public CompiledScript compile(String s) throws ScriptException {
         try {
+            beforeInvocation();
             return wrapCompiledScript((CompiledScript) afterInvocation(super.compile(beforeInvocation(s))));
         } catch (ScriptException e) {
             throw afterThrowsInvocation(e);
+        } catch (PolyglotException e) {
+            throw afterThrowsInvocation(toScriptException(e));
         } catch (Exception e) {
             throw new UndeclaredThrowableException(afterThrowsInvocation(e)); // Wrap and rethrow other exceptions
         }

@@ -271,7 +271,7 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         return true;
     }
 
-    private static ScriptException toScriptException(PolyglotException ex) {
+    protected static ScriptException toScriptException(PolyglotException ex) {
         ScriptException sex;
         if (ex.isHostException()) {
             Throwable hostException = ex.asHostException();

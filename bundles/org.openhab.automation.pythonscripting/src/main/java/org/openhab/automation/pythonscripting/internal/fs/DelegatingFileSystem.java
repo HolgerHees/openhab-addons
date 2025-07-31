@@ -39,15 +39,14 @@ import org.graalvm.polyglot.io.FileSystem;
 public class DelegatingFileSystem implements FileSystem {
     // Inspiration from
     // https://github.com/oracle/graal/blob/master/truffle/src/com.oracle.truffle.polyglot/src/com/oracle/truffle/polyglot/FileSystems.java
-    private FileSystemProvider delegate;
+    private final FileSystemProvider delegate = FileSystems.getDefault().provider();
+    private final Path tmpDir;
 
-    private Path userDir;
-    private Path tmpDir;
+    private volatile Path userDir;
 
     private Consumer<Path> consumer = null;
 
     public DelegatingFileSystem(Path tmpDir) {
-        this.delegate = FileSystems.getDefault().provider();
         this.tmpDir = tmpDir;
     }
 

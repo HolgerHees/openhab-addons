@@ -15,19 +15,23 @@ package org.openhab.automation.pythonscripting.internal.context;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.eclipse.jdt.annotation.Nullable;
+
 /**
  * ContextOutput implementation
  *
  * @author Holger Hees - Initial contribution
  */
+@NonNullByDefault
 public class ContextInput extends InputStream {
-    private InputStream stream;
+    private @Nullable InputStream stream;
 
-    public ContextInput(InputStream stream) {
+    public ContextInput(@Nullable InputStream stream) {
         this.stream = stream;
     }
 
-    public void setInputStream(InputStream stream) {
+    public void setInputStream(@Nullable InputStream stream) {
         this.stream = stream;
     }
 

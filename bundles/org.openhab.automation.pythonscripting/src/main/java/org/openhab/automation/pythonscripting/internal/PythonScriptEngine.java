@@ -40,6 +40,7 @@ import java.util.stream.Collectors;
 import javax.script.ScriptContext;
 import javax.script.ScriptException;
 
+import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -68,6 +69,7 @@ import org.slf4j.event.Level;
  * @author Holger Hees - Initial contribution
  * @author Jeff James - Initial contribution
  */
+@NonNullByDefault
 public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine implements Lock {
     private final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
 
@@ -344,18 +346,17 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     }
 
     @Override
-    protected String beforeInvocation(String source) {
-        String _source = super.beforeInvocation(source);
+    protected @Nullable String beforeInvocation(@Nullable String source) {
         // Happens for Transform and UI based rules (eval and compile)
         // and has to be evaluate every time, because of changing and late injected ruleUID
         if (getBindings(ScriptContext.ENGINE_SCOPE).get(LOGGER_INIT_NAME) != null) {
-            return LOGGER_INIT_NAME + "()\n" + _source;
+            return LOGGER_INIT_NAME + "()\n" + source;
         }
-        return _source;
+        return source;
     }
 
     @Override
-    protected Object afterInvocation(Object obj) {
+    protected @Nullable Object afterInvocation(@Nullable Object obj) {
         lock.unlock();
         logger.debug("Lock released after invocation for engine '{}'.", this.engineIdentifier);
         return obj;
@@ -363,6 +364,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
 
     @Override
     protected <E extends Exception> E afterThrowsInvocation(E e) {
+        Throwable cause = e.getCause();
         // OPS4J Pax Logging holds a reference to the exception, which causes the PythonScriptEngine to not be
         // removed from heap by garbage collection and causing a memory leak.
         // Therefore, don't pass the exceptions itself to the logger, but only their message!
@@ -371,11 +373,11 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             // org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl
             if (logger.isDebugEnabled()) {
                 logger.debug("Failed to execute script (PolyglotException) for engine '{}': {}", this.engineIdentifier,
-                        stringifyThrowable(e.getCause()));
+                        stringifyThrowable(cause == null ? e : cause));
             }
-        } else if (e.getCause() instanceof IllegalArgumentException) {
+        } else if (cause != null && e.getCause() instanceof IllegalArgumentException) {
             logger.error("Failed to execute script (IllegalArgumentException) for engine '{}': {}",
-                    this.engineIdentifier, stringifyThrowable(e.getCause()));
+                    this.engineIdentifier, stringifyThrowable(cause));
         }
 
         lock.unlock();
@@ -385,7 +387,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
 
     @Override
     // collect JSR223 (scope) variables separately, because they are delivered via 'import scope'
-    public void put(String key, Object value) {
+    public void put(@Nullable String key, @Nullable Object value) {
         if (CONTEXT_KEY_SCRIPT_FILENAME.equals(key)) {
             super.put(key, value);
         } else {
@@ -394,10 +396,15 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             if ("lifecycleTracker".equals(key)) {
                 value = lifecycleTracker;
             }
-            if (pythonScriptEngineConfiguration.isScopeEnabled()) {
-                scriptExtensionModuleProvider.put(key, value);
+            if (key != null && value != null) {
+                if (pythonScriptEngineConfiguration.isScopeEnabled()) {
+                    scriptExtensionModuleProvider.put(key, value);
+                } else {
+                    super.put(key, value);
+                }
             } else {
-                super.put(key, value);
+                throw new IllegalArgumentException(
+                        "Null value for key: " + key + ", value: " + value + " not supported");
             }
         }
     }
@@ -421,7 +428,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     }
 
     @Override
-    public boolean tryLock(long l, TimeUnit timeUnit) throws InterruptedException {
+    public boolean tryLock(long l, @Nullable TimeUnit timeUnit) throws InterruptedException {
         boolean acquired = lock.tryLock(l, timeUnit);
         logger.debug("{} for engine '{}'", acquired ? "Lock acquired." : "Lock not acquired.", this.engineIdentifier);
         return acquired;
