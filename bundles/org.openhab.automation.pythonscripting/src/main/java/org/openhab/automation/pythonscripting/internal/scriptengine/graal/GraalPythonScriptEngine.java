@@ -70,15 +70,22 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
     }
 
     /**
-     * Closes the current context and makes it unusable. Operations performed after closing will
-     * throw an {@link IllegalStateException}.
+     * Closes the current context and makes it unusable.
+     *
+     * Error happens in guest language will throw an {@link PolyglotException}.
+     * Operations performed after closing will throw an {@link IllegalStateException}.
      */
     @Override
-    public void close() throws PolyglotException, IllegalStateException {
+    public void close() throws ScriptException, IllegalStateException {
         logger.debug("GraalPythonScriptEngine closed");
 
-        // "true" to get an exception if something is still running in context
-        getPolyglotContext().close(true);
+        try {
+            // "true" to get an exception if something is still running in context
+            getPolyglotContext().close(true);
+        } catch (PolyglotException e) {
+            throw toScriptException(e);
+        }
+
     }
 
     @Override
