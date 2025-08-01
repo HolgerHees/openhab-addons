@@ -209,7 +209,7 @@ Check the related API documentation to confirm the requirements.
 Traceback (most recent call last):
 ```
 
-These error is similar to [TypeError]() above
+These error is similar to [TypeError](#typeerror-invalid-instantiation-of-foreign-object) above
 
 ## Limitations
 
