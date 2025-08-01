@@ -29,7 +29,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import org.eclipse.jdt.annotation.NonNull;
 import org.graalvm.polyglot.io.FileSystem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Delegate wrapping a {@link FileSystem}
@@ -37,20 +40,21 @@ import org.graalvm.polyglot.io.FileSystem;
  * @author Holger Hees - Initial contribution
  */
 public class DelegatingFileSystem implements FileSystem {
+    private static final Logger logger = LoggerFactory.getLogger(DelegatingFileSystem.class);
+
     // Inspiration from
     // https://github.com/oracle/graal/blob/master/truffle/src/com.oracle.truffle.polyglot/src/com/oracle/truffle/polyglot/FileSystems.java
     private final FileSystemProvider delegate = FileSystems.getDefault().provider();
     private final Path tmpDir;
 
     private volatile Path userDir;
-
-    private Consumer<Path> consumer = null;
+    private volatile Consumer<Path> consumer;
 
     public DelegatingFileSystem(Path tmpDir) {
         this.tmpDir = tmpDir;
     }
 
-    public void setAccessConsumer(Consumer<Path> consumer) {
+    public void setAccessConsumer(Consumer<@NonNull Path> consumer) {
         this.consumer = consumer;
     }
 
@@ -66,9 +70,6 @@ public class DelegatingFileSystem implements FileSystem {
 
     @Override
     public void checkAccess(Path path, Set<? extends AccessMode> modes, LinkOption... linkOptions) throws IOException {
-        if (consumer != null) {
-            consumer.accept(path);
-        }
         delegate.checkAccess(path, modes.toArray(new AccessMode[0]));
     }
 
@@ -160,6 +161,9 @@ public class DelegatingFileSystem implements FileSystem {
     public SeekableByteChannel newByteChannel(Path path, Set<? extends OpenOption> options, FileAttribute<?>... attrs)
             throws IOException {
         final Path resolved = resolveRelative(path);
+        if (consumer != null) {
+            consumer.accept(resolved);
+        }
         try {
             return delegate.newFileChannel(resolved, options, attrs);
         } catch (UnsupportedOperationException uoe) {

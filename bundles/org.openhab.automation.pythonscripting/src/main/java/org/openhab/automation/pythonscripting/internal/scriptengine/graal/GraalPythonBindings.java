@@ -21,7 +21,10 @@ import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /***
  * A Graal.Python implementation of Bindings backed by a HashMap or some other specified Map.
@@ -30,6 +33,8 @@ import org.graalvm.polyglot.Value;
  * @author Jeff James - Initial contribution
  */
 final class GraalPythonBindings extends AbstractMap<String, Object> implements javax.script.Bindings, AutoCloseable {
+    private final Logger logger = LoggerFactory.getLogger(GraalPythonBindings.class);
+
     private Context context;
     private Map<String, Object> global;
 
@@ -44,40 +49,16 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
         this.scriptEngine = scriptEngine;
     }
 
-    private void requireContext() {
-        if (context == null) {
-            context = contextBuilder.build();
-            initGlobal();
-        }
-    }
-
-    private void initGlobal() {
-        this.global = new HashMap<>();
-
+    public Context getContext() {
         requireContext();
-
-        context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__engine__", scriptEngine);
-        if (scriptContext != null) {
-            context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__context__", scriptContext);
-        }
+        return context;
     }
 
     @Override
     public Object put(String key, Object v) {
         requireContext();
-
         context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember(key, v);
         return global.put(key, v);
-    }
-
-    @Override
-    public void clear() {
-        if (context != null) {
-            Value binding = context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID);
-            for (var entry : global.entrySet()) {
-                binding.removeMember(entry.getKey());
-            }
-        }
     }
 
     @Override
@@ -95,9 +76,14 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
         return prev;
     }
 
-    public Context getContext() {
-        requireContext();
-        return context;
+    @Override
+    public void clear() {
+        if (context != null) {
+            Value binding = context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID);
+            for (var entry : global.entrySet()) {
+                binding.removeMember(entry.getKey());
+            }
+        }
     }
 
     @Override
@@ -106,14 +92,29 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
         return global.entrySet();
     }
 
+    /**
+     * Closes the current context and makes it unusable.
+     *
+     * Error happens in guest language will throw an {@link PolyglotException}.
+     * Operations performed after closing will throw an {@link IllegalStateException}.
+     */
     @Override
-    public void close() {
+    public void close() throws PolyglotException, IllegalStateException {
         if (context != null) {
-            context.close();
+            context.close(true);
+            context = null;
+            global = null;
         }
     }
 
-    void updateEngineScriptContext(ScriptContext scriptContext) {
-        this.scriptContext = scriptContext;
+    private void requireContext() {
+        if (context == null) {
+            context = contextBuilder.build();
+            global = new HashMap<>();
+            context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__engine__", scriptEngine);
+            if (scriptContext != null) {
+                context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__context__", scriptContext);
+            }
+        }
     }
 }

@@ -28,6 +28,7 @@ import javax.script.ScriptEngine;
 import javax.script.ScriptException;
 
 import org.graalvm.polyglot.Context;
+import org.graalvm.polyglot.Engine;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
@@ -54,17 +55,22 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
     /**
      * Creates a new GraalPython script engine from a polyglot Engine instance with a base configuration
      *
+     * @param engine
+     *
      * @param engine the engine to be used for context configurations
      * @param contextConfig a base configuration to create new context instances
      */
-    protected void init(Context.Builder contextConfig, ScriptEngineProvider scriptEngineProvider) {
+    protected void init(Engine engine, Context.Builder contextConfig, ScriptEngineProvider scriptEngineProvider) {
         logger.debug("GraalPythonScriptEngine created");
 
-        this.bindings = new GraalPythonBindings(contextConfig, this.context, this);
-        this.factory = new GraalPythonScriptEngineFactory(this.getPolyglotContext().getEngine(), scriptEngineProvider);
+        this.bindings = new GraalPythonBindings(contextConfig.engine(engine), this.context, this);
+        this.factory = new GraalPythonScriptEngineFactory(engine, scriptEngineProvider);
         this.context.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
     }
 
+    /*
+     * First call will initialize lazy polyglot context
+     */
     protected Context getPolyglotContext() {
         return bindings.getContext();
     }
@@ -80,8 +86,7 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         logger.debug("GraalPythonScriptEngine closed");
 
         try {
-            // "true" to get an exception if something is still running in context
-            getPolyglotContext().close(true);
+            bindings.close();
         } catch (PolyglotException e) {
             throw toScriptException(e);
         }

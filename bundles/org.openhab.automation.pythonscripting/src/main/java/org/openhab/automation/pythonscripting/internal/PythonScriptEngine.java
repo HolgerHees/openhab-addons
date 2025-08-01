@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -59,7 +60,12 @@ import org.openhab.automation.pythonscripting.internal.provider.ScriptExtensionM
 import org.openhab.automation.pythonscripting.internal.scriptengine.InvocationInterceptingPythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine;
 import org.openhab.core.automation.module.script.ScriptExtensionAccessor;
-import org.openhab.core.items.Item;
+import org.openhab.core.library.types.DateTimeType;
+import org.openhab.core.library.types.DecimalType;
+import org.openhab.core.library.types.OnOffType;
+import org.openhab.core.library.types.StringType;
+import org.openhab.core.types.State;
+import org.openhab.core.types.UnDefType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -72,7 +78,7 @@ import org.slf4j.event.Level;
  */
 @NonNullByDefault
 public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine implements Lock {
-    private final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
+    private static final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
 
     public static final String CONTEXT_KEY_ENGINE_LOGGER_OUTPUT = "ctx.engine-logger-output";
     public static final String CONTEXT_KEY_ENGINE_LOGGER_INPUT = "ctx.engine-logger-input";
@@ -117,20 +123,11 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     /** Provides unlimited host access as well as custom translations from Python to Java Objects */
     private static final HostAccess HOST_ACCESS = HostAccess.newBuilder(HostAccess.ALL)
             .targetTypeMapping(Value.class, ZonedDateTime.class, v -> v.hasMember("ctime") && v.hasMember("isoformat"),
-                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
-                            + (!v.hasMember("tzinfo") || v.getMember("tzinfo").isNull()
-                                    ? OffsetDateTime.now().getOffset().getId()
-                                    : "")),
-                    HostAccess.TargetMappingPrecedence.LOW)
+                    v -> PythonScriptEngine.parseDatetime(v), HostAccess.TargetMappingPrecedence.LOW)
 
             // Translate python datetime java.time.Instant
             .targetTypeMapping(Value.class, Instant.class, v -> v.hasMember("ctime") && v.hasMember("isoformat"),
-                    v -> ZonedDateTime.parse(v.invokeMember("isoformat").asString()
-                            + (!v.hasMember("tzinfo") || v.getMember("tzinfo").isNull()
-                                    ? OffsetDateTime.now().getOffset().getId()
-                                    : ""))
-                            .toInstant(),
-                    HostAccess.TargetMappingPrecedence.LOW)
+                    v -> PythonScriptEngine.parseDatetime(v).toInstant(), HostAccess.TargetMappingPrecedence.LOW)
 
             // Translate python timedelta to java.time.Duration
             .targetTypeMapping(Value.class, Duration.class,
@@ -139,13 +136,17 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
                     v -> Duration.ofNanos(Math.round(v.invokeMember("total_seconds").asDouble() * 1000000000)),
                     HostAccess.TargetMappingPrecedence.LOW)
 
-            // Translate python item to org.openhab.core.items.Item
-            .targetTypeMapping(Value.class, Item.class, v -> v.hasMember("raw_item"),
-                    v -> v.getMember("raw_item").as(Item.class), HostAccess.TargetMappingPrecedence.LOW)
-
             // Translate python array to java.util.Set
             .targetTypeMapping(Value.class, Set.class, v -> v.hasArrayElements(),
                     PythonScriptEngine::transformArrayToSet, HostAccess.TargetMappingPrecedence.LOW)
+
+            // Translate python item to org.openhab.core.items.Item
+            // .targetTypeMapping(Value.class, Item.class, v -> v.hasMember("raw_item"),
+            // v -> v.getMember("raw_item").as(Item.class), HostAccess.TargetMappingPrecedence.LOW)
+
+            // Translate python values to State
+            .targetTypeMapping(Value.class, State.class, null, PythonScriptEngine::transformValueToState,
+                    HostAccess.TargetMappingPrecedence.LOW)
 
             .build();
 
@@ -186,7 +187,6 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
         this.delegatingFileSystem = new DelegatingFileSystem(pythonScriptEngineConfiguration.getTempDirectory());
 
         Context.Builder contextConfig = Context.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID) //
-                .engine(engine) //
                 .out(scriptOutputStream) //
                 .err(scriptErrorStream) //
                 .in(scriptInputStream) //
@@ -244,7 +244,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
                     .option(PYTHON_OPTION_CHECKHASHPYCSMODE, "never");
         }
 
-        init(contextConfig, pythonScriptEngineFactory);
+        init(engine, contextConfig, pythonScriptEngineFactory);
     }
 
     @Override
@@ -263,6 +263,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
         // these are added post-construction, so we need to fetch them late
         String engineIdentifier = (String) ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
         if (engineIdentifier != null) {
+
             this.engineIdentifier = engineIdentifier;
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
@@ -282,7 +283,22 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
                     this.delegatingFileSystem.setAccessConsumer(new Consumer<Path>() {
                         @Override
                         public void accept(Path path) {
+                            String pathAsString = path.toString();
+                            // convert cache path to real path
+                            if (pathAsString.endsWith(".pyc")) {
+                                // SOURCE <cachepath><libpath><filename>.graalpy-232-311.pyc
+                                // TARGET <libpath><filename>.py
+                                int pos = pathAsString
+                                        .indexOf(PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString());
+                                if (pos != -1) {
+                                    pathAsString = pathAsString.substring(pos, pathAsString.length() - 4);
+                                    int indexof = pathAsString.lastIndexOf(".");
+                                    pathAsString = pathAsString.substring(0, indexof);
+                                    path = Paths.get(pathAsString + ".py");
+                                }
+                            }
                             if (path.startsWith(PythonScriptEngineConfiguration.PYTHON_LIB_PATH)) {
+                                // logger.info("REGISTER PATH: {}", path);
                                 scriptDependencyListener.accept(path.toString());
                             }
                         }
@@ -512,12 +528,53 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     }
 
     private static Set<String> transformArrayToSet(Value value) {
-        Set<String> set = new HashSet<>();
-        for (int i = 0; i < value.getArraySize(); ++i) {
-            Value element = value.getArrayElement(i);
-            set.add(element.asString());
+        try {
+            Set<String> set = new HashSet<>();
+            for (int i = 0; i < value.getArraySize(); ++i) {
+                Value element = value.getArrayElement(i);
+                set.add(element.isString() ? element.asString() : element.toString());
+            }
+            return set;
+        } catch (Exception e) {
+            logger.error("Can't convert python value '{}' ({}) to a java.util.Set<String>\n{}", value.toString(),
+                    value.getClass(), e.getMessage());
+            throw e;
         }
-        return set;
+    }
+
+    private static State transformValueToState(Value value) {
+        try {
+            if (value.isBoolean()) {
+                // logger.info("VALUE: OnOffType {}", value.asBoolean());
+                return OnOffType.from(value.asBoolean());
+            } else if (value.isNumber()) {
+                // logger.info("VALUE: DecimalType {}", value.toString());
+                return DecimalType.valueOf(value.toString());
+            } else if (value.hasMember("ctime") && value.hasMember("isoformat")) {
+                // logger.info("VALUE: DateTimeType");
+                return new DateTimeType(PythonScriptEngine.parseDatetime(value));
+            } else if (value.isString()) {
+                // logger.info("VALUE: StringType {}", value.asString());
+                return StringType.valueOf(value.asString());
+            } else if (value.isNull()) {
+                // logger.info("VALUE: UnDefType.NULL {}", value.toString());
+                return UnDefType.NULL;
+            } else {
+                // logger.info("VALUE: FALLBACK {}", value.toString());
+                return StringType.valueOf(value.toString());
+            }
+        } catch (Exception e) {
+            logger.error("Can't convert python value '{}' ({}) to an org.openhab.core.types.State object\n{}",
+                    value.toString(), value.getClass(), e.getMessage());
+            throw e;
+        }
+    }
+
+    private static ZonedDateTime parseDatetime(Value value) {
+        return ZonedDateTime.parse(value.invokeMember("isoformat").asString()
+                + (!value.hasMember("tzinfo") || value.getMember("tzinfo").isNull()
+                        ? OffsetDateTime.now().getOffset().getId()
+                        : ""));
     }
 
     public static @Nullable Language getLanguage() {

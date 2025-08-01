@@ -138,17 +138,6 @@ This can happen after a new Add-on installation, if JSScripting is active at the
 
 Just restart openhab to initialize available graal languages properly.
 
-### ScriptException: org.graalvm.polyglot.PolyglotException: Context execution was cancelled.
-
-```log
-2025-07-31 15:52:10.955 [ERROR] [ipt.internal.ScriptEngineManagerImpl] - Error while executing script
-javax.script.ScriptException: org.graalvm.polyglot.PolyglotException: Context execution was cancelled.
-```
-
-This error typical happens, after am Add-on update and indicates usage of outdated graal contexts
-
-Just restart openhab to initialize all contexts again.
-
 ### User timezone 'XYZ' is different than openhab regional timezone ...
 
 ```log
@@ -201,6 +190,26 @@ SystemError, Option python.NativeModules is set to 'true' and a second GraalPy c
 ```
 
 These errors can occur if you use a native library in your external module but forgot to enable "native modules". Check the [Add-on configuration](#configuration) and enable 
+
+### TypeError, invalid instantiation of foreign object
+
+```
+2025-08-01 15:10:39.528 [ERROR] [b.automation.pythonscripting.test.py] - TypeError, invalid instantiation of foreign object
+Traceback (most recent call last):
+```
+
+One of your function parameter does not match the required value type.
+
+Check the related API documentation to confirm the requirements.
+
+### AttributeError, One of your function parameters does not match ...
+
+```
+2025-08-01 15:10:39.528 [ERROR] [b.automation.pythonscripting.test.py] - AttributeError, One of your function parameters does not match the required value type. Check the openHAB API documentation to confirm correct value type.
+Traceback (most recent call last):
+```
+
+These error is similar to [TypeError]() above
 
 ## Limitations
 
