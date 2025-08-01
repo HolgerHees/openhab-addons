@@ -128,7 +128,9 @@ As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can
 
 ## Typical log errors
 
-### Graal python language not initialized. ...
+### Add-on errors
+
+#### Graal python language not initialized. ...
 
 ```log
 2025-07-25 12:10:06.001 [ERROR] [g.internal.PythonScriptEngineFactory] - Graal python language not initialized. Restart openhab to initialize available graal languages properly.
@@ -138,7 +140,7 @@ This can happen after a new Add-on installation, if JSScripting is active at the
 
 Just restart openhab to initialize available graal languages properly.
 
-### User timezone 'XYZ' is different than openhab regional timezone ...
+#### User timezone 'XYZ' is different than openhab regional timezone ...
 
 ```log
 2025-07-22 09:15:53.705 [WARN ] [g.internal.PythonScriptEngineFactory] - User timezone 'Europe/London' is different than openhab regional timezone 'Europe/Berlin'. Python Scripting is running with timezone 'Europe/London'.
@@ -153,7 +155,7 @@ e.g. in openHABian this can be changed in /etc/default/openhab
 
 or for containers, this can be provided as a additional environment variable.
 
-### Can't install pip modules. VEnv not enabled.
+#### Can't install pip modules. VEnv not enabled.
 
 ```log
 2025-07-22 09:19:05.759 [ERROR] [rnal.PythonScriptEngineConfiguration] - Can't install pip modules. VEnv not enabled.
@@ -161,7 +163,7 @@ or for containers, this can be provided as a additional environment variable.
 
 You configured preinstalled pip modules, but the mandatory VEnv setup is not initialized or detected. Please confirm the correct setup, by following the steps about [Enabling VEnv](#enabling-venv)
 
-### Exception during helper lib initialisation
+#### Exception during helper lib initialisation
 
 ```log
 2025-07-20 09:15:05.100 [ERROR] [rnal.PythonScriptEngineConfiguration] - Exception during helper lib initialisation
@@ -171,7 +173,7 @@ There were problems during the deployment of the helper libs.
 A typical error is an insufficient permission.
 The folder "conf/automation/python/" must be writeable by openHAB.
 
-### Failed to inject import wrapper for engine ...
+#### Failed to inject import wrapper for engine ...
 
 ```log
 2025-07-20 10:01:17.211 [ERROR] [cripting.internal.PythonScriptEngine] - Failed to inject import wrapper for engine
@@ -183,7 +185,7 @@ This could either a permission/owner problem or a problem during deployment of t
 You should check that this file exists and it is readable by openHAB.
 You should also check your logs for a message related to the helper lib deployment by just grep for "helper lib".
 
-### SystemError, Option python.NativeModules is set to 'true' and a second GraalPy context ...
+#### SystemError, Option python.NativeModules is set to 'true' and a second GraalPy context ...
 
 ```log
 SystemError, Option python.NativeModules is set to 'true' and a second GraalPy context attempted to load a native module '<xyz>' from path '<lib_path>.so'. At least one context in this process runs with 'IsolateNativeModules' set to false. Depending on the order of context creation, this means some contexts in the process cannot use native module, all other contexts must fall back and set python.NativeModules to 'false' to run native extensions in LLVM mode. This is recommended only for extensions included in the Python standard library. Running a 3rd party extension in LLVM mode requires a custom build of the extension and is generally discouraged due to compatibility reasons.
@@ -191,7 +193,9 @@ SystemError, Option python.NativeModules is set to 'true' and a second GraalPy c
 
 These errors can occur if you use a native library in your external module but forgot to enable "native modules". Check the [Add-on configuration](#configuration) and enable 
 
-### TypeError, invalid instantiation of foreign object
+### Script errors
+
+#### TypeError, invalid instantiation of foreign object
 
 ```
 2025-08-01 15:10:39.528 [ERROR] [b.automation.pythonscripting.test.py] - TypeError, invalid instantiation of foreign object
@@ -202,7 +206,7 @@ One of your function parameter does not match the required value type.
 
 Check the related API documentation to confirm the requirements.
 
-### AttributeError, One of your function parameters does not match ...
+#### AttributeError, One of your function parameters does not match ...
 
 ```
 2025-08-01 15:10:39.528 [ERROR] [b.automation.pythonscripting.test.py] - AttributeError, One of your function parameters does not match the required value type. Check the openHAB API documentation to confirm correct value type.
