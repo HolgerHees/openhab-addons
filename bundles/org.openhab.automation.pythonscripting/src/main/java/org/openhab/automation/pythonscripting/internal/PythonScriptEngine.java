@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 import javax.script.ScriptContext;
 import javax.script.ScriptException;
 
-import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Engine;
@@ -76,9 +75,8 @@ import org.slf4j.event.Level;
  * @author Holger Hees - Initial contribution
  * @author Jeff James - Initial contribution
  */
-@NonNullByDefault
 public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine implements Lock {
-    private static final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
+    private final Logger logger = LoggerFactory.getLogger(PythonScriptEngine.class);
 
     public static final String CONTEXT_KEY_ENGINE_LOGGER_OUTPUT = "ctx.engine-logger-output";
     public static final String CONTEXT_KEY_ENGINE_LOGGER_INPUT = "ctx.engine-logger-input";
@@ -156,7 +154,6 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     private PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 
     private boolean initialized = false;
-    private boolean closed = false;
 
     private String engineIdentifier = "<uninitialized>";
 
@@ -263,8 +260,8 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
         // these are added post-construction, so we need to fetch them late
         String engineIdentifier = (String) ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
         if (engineIdentifier != null) {
-
             this.engineIdentifier = engineIdentifier;
+
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
             if (scriptExtensionAccessor == null) {
@@ -458,28 +455,52 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
     }
 
     @Override
+    public Object invokeFunction(String name, Object... objects) throws ScriptException, NoSuchMethodException {
+        if ("scriptUnloaded".equals(name)) {
+            /*
+             * is called from
+             * => org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl:removeEngine
+             *
+             * must be skipped
+             * - we already run the lifecycle tracker on close()
+             * - ScriptTransformationService:disposeScriptEngine is calling close several times before. Specially if the
+             * same script is used for more then 1 transformations
+             */
+            return null;
+        } else {
+            return super.invokeFunction(name, objects);
+        }
+    }
+
+    @Override
     public void close() {
+        /*
+         * is called from
+         * => org.openhab.core.automation.module.script.ScriptTransformationService:disposeScriptEngine
+         * => org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl:removeEngine
+         */
+
         lock.lock();
 
-        if (!closed) {
+        if (!isClosed()) {
             try {
+                // logger.info("LifecycleTracker '{}' close", this.engineIdentifier);
+                // this.getPolyglotContext(); => only needed if engine was closed before
                 this.lifecycleTracker.dispose();
+                logger.debug("LifecycleTracker for engine '{}' disposed.", this.engineIdentifier);
             } catch (Exception e) {
-                logger.warn("Ignoreable exception during dispose: {}", stringifyThrowable(e));
+                logger.warn("Ignoreable exception during LifecycleTracker dispose for engine '{}': {}",
+                        this.engineIdentifier, stringifyThrowable(e));
             }
-            logger.debug("Engine '{}' disposed.", this.engineIdentifier);
 
             try {
+                // logger.info("Engine '{}' close", this.engineIdentifier);
                 super.close();
+                logger.debug("Engine '{}' closed.", this.engineIdentifier);
             } catch (Exception e) {
-                logger.warn("Ignoreable exception during close: {}", stringifyThrowable(e));
+                logger.warn("Ignoreable exception during close of engine '{}': {}", this.engineIdentifier,
+                        stringifyThrowable(e));
             }
-
-            logger.debug("Engine '{}' closed.", this.engineIdentifier);
-
-            closed = true;
-        } else {
-            logger.debug("Engine '{}' already disposed and closed.", this.engineIdentifier);
         }
 
         lock.unlock();
@@ -536,9 +557,9 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             }
             return set;
         } catch (Exception e) {
-            logger.error("Can't convert python value '{}' ({}) to a java.util.Set<String>\n{}", value.toString(),
-                    value.getClass(), e.getMessage());
-            throw e;
+            String msg = "Can't convert python value '" + value.toString() + "' (" + value.getClass()
+                    + ") to a java.util.Set<String>\n" + e.getClass().getSimpleName() + ": " + e.getMessage();
+            throw new IllegalArgumentException(msg, e);
         }
     }
 
@@ -564,9 +585,10 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
                 return StringType.valueOf(value.toString());
             }
         } catch (Exception e) {
-            logger.error("Can't convert python value '{}' ({}) to an org.openhab.core.types.State object\n{}",
-                    value.toString(), value.getClass(), e.getMessage());
-            throw e;
+            String msg = "Can't convert python value '" + value.toString() + "' (" + value.getClass()
+                    + ") to an org.openhab.core.types.State object\n" + e.getClass().getSimpleName() + ": "
+                    + e.getMessage();
+            throw new IllegalArgumentException(msg, e);
         }
     }
 

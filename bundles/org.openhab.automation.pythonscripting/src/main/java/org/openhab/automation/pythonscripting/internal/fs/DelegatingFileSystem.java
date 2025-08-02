@@ -31,8 +31,6 @@ import java.util.function.Consumer;
 
 import org.eclipse.jdt.annotation.NonNull;
 import org.graalvm.polyglot.io.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Delegate wrapping a {@link FileSystem}
@@ -40,8 +38,6 @@ import org.slf4j.LoggerFactory;
  * @author Holger Hees - Initial contribution
  */
 public class DelegatingFileSystem implements FileSystem {
-    private static final Logger logger = LoggerFactory.getLogger(DelegatingFileSystem.class);
-
     // Inspiration from
     // https://github.com/oracle/graal/blob/master/truffle/src/com.oracle.truffle.polyglot/src/com/oracle/truffle/polyglot/FileSystems.java
     private final FileSystemProvider delegate = FileSystems.getDefault().provider();

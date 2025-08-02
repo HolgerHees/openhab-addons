@@ -23,8 +23,6 @@ import javax.script.ScriptEngine;
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Value;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /***
  * A Graal.Python implementation of Bindings backed by a HashMap or some other specified Map.
@@ -33,8 +31,6 @@ import org.slf4j.LoggerFactory;
  * @author Jeff James - Initial contribution
  */
 final class GraalPythonBindings extends AbstractMap<String, Object> implements javax.script.Bindings, AutoCloseable {
-    private final Logger logger = LoggerFactory.getLogger(GraalPythonBindings.class);
-
     private Context context;
     private Map<String, Object> global;
 
@@ -42,6 +38,8 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
     // ScriptContext of the ScriptEngine where these bindings form ENGINE_SCOPE bindings
     private ScriptContext scriptContext;
     private ScriptEngine scriptEngine;
+
+    private boolean isClosed = false;
 
     GraalPythonBindings(Context.Builder contextBuilder, ScriptContext scriptContext, ScriptEngine scriptEngine) {
         this.contextBuilder = contextBuilder;
@@ -102,15 +100,24 @@ final class GraalPythonBindings extends AbstractMap<String, Object> implements j
     public void close() throws PolyglotException, IllegalStateException {
         if (context != null) {
             context.close(true);
-            context = null;
-            global = null;
+            // context = null;
+            // global = null;
         }
+        isClosed = true;
+    }
+
+    public boolean isClosed() {
+        return isClosed;
     }
 
     private void requireContext() {
         if (context == null) {
+            if (isClosed) {
+                throw new IllegalStateException("Context already closed");
+            }
             context = contextBuilder.build();
             global = new HashMap<>();
+
             context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__engine__", scriptEngine);
             if (scriptContext != null) {
                 context.getBindings(GraalPythonScriptEngine.LANGUAGE_ID).putMember("__context__", scriptContext);

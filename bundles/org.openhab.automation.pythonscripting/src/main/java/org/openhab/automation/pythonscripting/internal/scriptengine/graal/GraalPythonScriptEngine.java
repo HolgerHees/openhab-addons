@@ -33,8 +33,6 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.SourceSection;
 import org.graalvm.polyglot.Value;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A Graal.Python implementation of the script engine.
@@ -44,9 +42,6 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         implements Compilable, Invocable, AutoCloseable {
-
-    private final Logger logger = LoggerFactory.getLogger(GraalPythonScriptEngine.class);
-
     public static final String LANGUAGE_ID = "python";
 
     private GraalPythonScriptEngineFactory factory;
@@ -61,8 +56,6 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
      * @param contextConfig a base configuration to create new context instances
      */
     protected void init(Engine engine, Context.Builder contextConfig, ScriptEngineProvider scriptEngineProvider) {
-        logger.debug("GraalPythonScriptEngine created");
-
         this.bindings = new GraalPythonBindings(contextConfig.engine(engine), this.context, this);
         this.factory = new GraalPythonScriptEngineFactory(engine, scriptEngineProvider);
         this.context.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
@@ -75,6 +68,10 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         return bindings.getContext();
     }
 
+    protected boolean isClosed() {
+        return bindings.isClosed();
+    }
+
     /**
      * Closes the current context and makes it unusable.
      *
@@ -83,8 +80,6 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
      */
     @Override
     public void close() throws ScriptException, IllegalStateException {
-        logger.debug("GraalPythonScriptEngine closed");
-
         try {
             bindings.close();
         } catch (PolyglotException e) {
