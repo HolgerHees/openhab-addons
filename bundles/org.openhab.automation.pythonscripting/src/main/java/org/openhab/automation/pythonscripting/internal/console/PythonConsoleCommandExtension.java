@@ -45,6 +45,7 @@ import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfigu
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
 import org.openhab.automation.pythonscripting.internal.fs.PythonScriptFileWatcher;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
+import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
 import org.openhab.core.config.core.ConfigDescription;
 import org.openhab.core.config.core.ConfigDescriptionParameter;
@@ -486,19 +487,23 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
      * including any injected required modules.
      */
     private @Nullable Object executePython(Console console, EngineEvalFunction process, boolean withFullContext) {
-        String scriptIdentifier = null;
+        String scriptIdentifier = "python-console-" + UUID.randomUUID().toString();
+
         try {
             ScriptEngine engine = null;
             printLoadingMessage(console, true);
 
             if (withFullContext) {
-                scriptIdentifier = "python-console-" + UUID.randomUUID().toString();
                 ScriptEngineContainer container = scriptEngineManager.createScriptEngine(scriptType, scriptIdentifier);
                 if (container != null) {
                     engine = container.getScriptEngine();
                 }
             } else {
                 engine = pythonScriptEngineFactory.createScriptEngine(scriptType);
+                if (engine != null) {
+                    engine.getContext().setAttribute(ScriptEngineFactory.CONTEXT_KEY_ENGINE_IDENTIFIER,
+                            scriptIdentifier, ScriptContext.ENGINE_SCOPE);
+                }
             }
 
             if (engine == null) {
@@ -518,7 +523,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             console.println("Error: " + e.getMessage());
             return null;
         } finally {
-            if (scriptIdentifier != null) {
+            if (withFullContext) {
                 scriptEngineManager.removeEngine(scriptIdentifier);
             }
         }

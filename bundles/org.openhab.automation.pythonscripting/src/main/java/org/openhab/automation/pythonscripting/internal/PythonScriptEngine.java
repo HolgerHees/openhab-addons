@@ -253,86 +253,82 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             return;
         }
 
-        logger.debug("Initializing GraalPython script engine '{}' ...", this.engineIdentifier);
-
         ScriptContext ctx = getContext();
 
         // these are added post-construction, so we need to fetch them late
         String engineIdentifier = (String) ctx.getAttribute(CONTEXT_KEY_ENGINE_IDENTIFIER);
         if (engineIdentifier != null) {
             this.engineIdentifier = engineIdentifier;
+        } else {
+            logger.warn("Failed to retrieve script indentifier");
+        }
 
+        logger.debug("Initializing GraalPython script engine '{}' ...", this.engineIdentifier);
+
+        if (pythonScriptEngineConfiguration.isDependencyTrackingEnabled()) {
+            @SuppressWarnings("unchecked")
+            Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
+                    .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
+            if (scriptDependencyListener == null) {
+                logger.warn(
+                        "Failed to retrieve script dependency listener from engine bindings. Script dependency tracking will be disabled for engine '{}'.",
+                        this.engineIdentifier);
+            } else {
+                this.delegatingFileSystem.setAccessConsumer(new Consumer<Path>() {
+                    @Override
+                    public void accept(Path path) {
+                        String pathAsString = path.toString();
+                        // convert cache path to real path
+                        if (pathAsString.endsWith(".pyc")) {
+                            // SOURCE <cachepath><libpath><filename>.graalpy-232-311.pyc
+                            // TARGET <libpath><filename>.py
+                            int pos = pathAsString.indexOf(PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString());
+                            if (pos != -1) {
+                                pathAsString = pathAsString.substring(pos, pathAsString.length() - 4);
+                                int indexof = pathAsString.lastIndexOf(".");
+                                pathAsString = pathAsString.substring(0, indexof);
+                                path = Paths.get(pathAsString + ".py");
+                            }
+                        }
+                        if (path.startsWith(PythonScriptEngineConfiguration.PYTHON_LIB_PATH)) {
+                            // logger.info("REGISTER PATH: {} of engine {}", path,
+                            // PythonScriptEngine.this.engineIdentifier);
+                            scriptDependencyListener.accept(path.toString());
+                        }
+                    }
+                });
+            }
+        }
+
+        if (pythonScriptEngineConfiguration.isScopeEnabled()) {
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
             if (scriptExtensionAccessor == null) {
                 throw new IllegalStateException("Failed to retrieve script extension accessor from engine bindings");
             }
 
-            if (pythonScriptEngineConfiguration.isDependencyTrackingEnabled()) {
-                @SuppressWarnings("unchecked")
-                Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
-                        .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
-                if (scriptDependencyListener == null) {
-                    logger.warn(
-                            "Failed to retrieve script dependency listener from engine bindings. Script dependency tracking will be disabled for engine '{}'.",
-                            this.engineIdentifier);
-                } else {
-                    this.delegatingFileSystem.setAccessConsumer(new Consumer<Path>() {
-                        @Override
-                        public void accept(Path path) {
-                            String pathAsString = path.toString();
-                            // convert cache path to real path
-                            if (pathAsString.endsWith(".pyc")) {
-                                // SOURCE <cachepath><libpath><filename>.graalpy-232-311.pyc
-                                // TARGET <libpath><filename>.py
-                                int pos = pathAsString
-                                        .indexOf(PythonScriptEngineConfiguration.PYTHON_LIB_PATH.toString());
-                                if (pos != -1) {
-                                    pathAsString = pathAsString.substring(pos, pathAsString.length() - 4);
-                                    int indexof = pathAsString.lastIndexOf(".");
-                                    pathAsString = pathAsString.substring(0, indexof);
-                                    path = Paths.get(pathAsString + ".py");
-                                }
-                            }
-                            if (path.startsWith(PythonScriptEngineConfiguration.PYTHON_LIB_PATH)) {
-                                // logger.info("REGISTER PATH: {}", path);
-                                scriptDependencyListener.accept(path.toString());
-                            }
-                        }
-                    });
-                }
-            }
+            // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
+            BiFunction<String, List<String>, Object> wrapImportFn = (name, fromlist) -> scriptExtensionModuleProvider
+                    .locatorFor(getPolyglotContext(), this.engineIdentifier, scriptExtensionAccessor)
+                    .locateModule(name, fromlist);
+            getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME, wrapImportFn);
+            try {
+                String wrapperContent = new String(
+                        Files.readAllBytes(PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH));
+                getPolyglotContext().eval(Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, wrapperContent,
+                        PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH.toString()).build());
 
-            if (pythonScriptEngineConfiguration.isScopeEnabled()) {
-                // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
-                BiFunction<String, List<String>, Object> wrapImportFn = (name,
-                        fromlist) -> scriptExtensionModuleProvider
-                                .locatorFor(getPolyglotContext(), engineIdentifier, scriptExtensionAccessor)
-                                .locateModule(name, fromlist);
-                getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME,
-                        wrapImportFn);
-                try {
-                    String wrapperContent = new String(
-                            Files.readAllBytes(PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH));
-                    getPolyglotContext()
-                            .eval(Source
-                                    .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, wrapperContent,
-                                            PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH.toString())
-                                    .build());
-
-                    // inject scope, Registry and logger
-                    if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
-                            && (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null || pythonScriptEngineConfiguration
-                                    .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
-                        String injectionContent = "import scope\nfrom openhab import Registry, logger";
-                        getPolyglotContext().eval(
-                                Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>")
-                                        .build());
-                    }
-                } catch (IOException e) {
-                    logger.error("Failed to inject import wrapper for engine '{}'", this.engineIdentifier, e);
-                    throw new IllegalArgumentException("Failed to inject import wrapper", e);
+                // inject scope, Registry and logger
+                if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
+                        && (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null || pythonScriptEngineConfiguration
+                                .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
+                    String injectionContent = "import scope\nfrom openhab import Registry, logger";
+                    getPolyglotContext().eval(Source
+                            .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>").build());
                 }
+            } catch (IOException e) {
+                logger.error("Failed to inject import wrapper for engine '{}'", this.engineIdentifier, e);
+                throw new IllegalArgumentException("Failed to inject import wrapper", e);
             }
         }
 
