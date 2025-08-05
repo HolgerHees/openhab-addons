@@ -520,7 +520,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
 
         String identifier = "stack";
         if (fileName != null) {
-            identifier = fileName.toString().replaceAll("^.*[/\\\\]", "");
+            identifier = fileName.toString().replaceAll("^.*[/\\\\]", "").replaceAll(".py", "");
         } else if (ruleUID != null) {
             identifier = ruleUID.toString();
         } else if (ohEngineIdentifier != null) {
