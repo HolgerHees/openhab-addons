@@ -72,6 +72,7 @@ public class PythonScriptEngineConfiguration {
 
     public static final Path PYTHON_DEFAULT_PATH = Paths.get(OpenHAB.getConfigFolder(), "automation", "python");
     public static final Path PYTHON_LIB_PATH = PYTHON_DEFAULT_PATH.resolve("lib");
+    public static final Path PYTHON_TYPINGS_PATH = PYTHON_DEFAULT_PATH.resolve("typings");
     public static final Path PYTHON_OPENHAB_LIB_PATH = PYTHON_LIB_PATH.resolve("openhab");
 
     public static final Path PYTHON_WRAPPER_FILE_PATH = PYTHON_OPENHAB_LIB_PATH.resolve("__wrapper__.py");

@@ -83,6 +83,16 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory, ScriptEng
                     defaultTimezone, providerTimezone, defaultTimezone);
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
+
+        /*
+         * try {
+         * Builder builder = new Builder();
+         * builder.build("org.openhab", PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH,
+         * new Builder.Logger(logger));
+         * } catch (Exception e) {
+         * e.printStackTrace();
+         * }
+         */
     }
 
     @Deactivate

@@ -14,22 +14,10 @@ package org.openhab.automation.pythonscripting.internal.console;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.module.ModuleDescriptor.Version;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.SortedSet;
 import java.util.UUID;
 
@@ -39,16 +27,15 @@ import javax.script.ScriptException;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
-import org.graalvm.polyglot.Language;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
-import org.openhab.automation.pythonscripting.internal.fs.PythonScriptFileWatcher;
+import org.openhab.automation.pythonscripting.internal.console.handler.Info;
+import org.openhab.automation.pythonscripting.internal.console.handler.Typing;
+import org.openhab.automation.pythonscripting.internal.console.handler.Update;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
-import org.openhab.core.config.core.ConfigDescription;
-import org.openhab.core.config.core.ConfigDescriptionParameter;
 import org.openhab.core.config.core.ConfigDescriptionRegistry;
 import org.openhab.core.io.console.Console;
 import org.openhab.core.io.console.ConsoleCommandCompleter;
@@ -59,11 +46,6 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-
 /**
  * The {@link PythonConsoleCommandExtension} class
  *
@@ -72,11 +54,9 @@ import com.google.gson.JsonParser;
 @NonNullByDefault
 @Component(service = ConsoleCommandExtension.class)
 public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtension implements ConsoleCommandCompleter {
-    private static final String UPDATE_RELEASES_URL = "https://api.github.com/repos/openhab/openhab-python/releases";
-    private static final String UPDATE_LATEST_URL = "https://api.github.com/repos/openhab/openhab-python/releases/latest";
-
     private static final String INFO = "info";
     private static final String CONSOLE = "console";
+    private static final String TYPING = "typing";
     private static final String PIP = "pip";
     private static final String PIP_INSTALL = "install";
     private static final String PIP_UNINSTALL = "uninstall";
@@ -87,13 +67,12 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     private static final String UPDATE_CHECK = "check";
     private static final String UPDATE_INSTALL = "install";
 
-    private static final List<String> COMMANDS = List.of(INFO, CONSOLE, UPDATE);
+    private static final List<String> COMMANDS = List.of(INFO, CONSOLE, UPDATE, TYPING);
     private static final List<String> UPDATE_COMMANDS = List.of(UPDATE_LIST, UPDATE_CHECK, UPDATE_INSTALL);
     private static final List<String> PIP_COMMANDS = List.of(PIP_INSTALL, PIP_UNINSTALL, PIP_SHOW, PIP_LIST);
 
     private final ScriptEngineManager scriptEngineManager;
     private final PythonScriptEngineFactory pythonScriptEngineFactory;
-    private final PythonScriptFileWatcher scriptFileWatcher;
     private final ConfigDescriptionRegistry configDescriptionRegistry;
     private final PythonScriptEngineConfiguration pythonScriptEngineConfiguration;
 
@@ -103,13 +82,11 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     public PythonConsoleCommandExtension( //
             @Reference ScriptEngineManager scriptEngineManager, //
             @Reference PythonScriptEngineFactory pythonScriptEngineFactory, //
-            @Reference PythonScriptFileWatcher scriptFileWatcher, //
             @Reference ConfigDescriptionRegistry configDescriptionRegistry) {
         super("pythonscripting", "Python Scripting console utilities.");
         this.scriptEngineManager = scriptEngineManager;
         this.pythonScriptEngineFactory = pythonScriptEngineFactory;
         this.pythonScriptEngineConfiguration = pythonScriptEngineFactory.getConfiguration();
-        this.scriptFileWatcher = scriptFileWatcher;
         this.scriptType = PythonScriptEngineFactory.SCRIPT_TYPE;
         this.configDescriptionRegistry = configDescriptionRegistry;
     }
@@ -128,6 +105,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         if (pythonScriptEngineConfiguration.isVEnvEnabled()) {
             usages.add(getPipUsage());
         }
+        usages.add(buildCommandUsage(TYPING, "create type hint stub files"));
         return usages;
     }
 
@@ -178,6 +156,9 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
                 case UPDATE:
                     executeUpdate(console, Arrays.copyOfRange(args, 1, args.length));
                     break;
+                case TYPING:
+                    executeTyping(console);
+                    break;
                 case PIP:
                     if (pythonScriptEngineConfiguration.isVEnvEnabled()) {
                         executePip(console, Arrays.copyOfRange(args, 1, args.length));
@@ -194,66 +175,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     }
 
     private void info(Console console) {
-        console.println("Python Scripting Environment:");
-        console.println("======================================");
-        console.println("  Runtime:");
-        console.println("    Bundle version: " + pythonScriptEngineConfiguration.getBundleVersion());
-        console.println("    GraalVM version: " + pythonScriptEngineConfiguration.getGraalVersion());
-        Language language = PythonScriptEngine.getLanguage();
-        console.println("    Python version: " + (language != null ? language.getVersion() : "unavailable"));
-        Version version = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
-        console.println("    Helper lib version: " + (version != null ? version.toString() : "disabled"));
-        console.println(
-                "    VEnv state: " + (pythonScriptEngineConfiguration.isVEnvEnabled() ? "enabled" : "disabled"));
-        console.println("");
-        console.println("  Directories:");
-        console.println("    Script path: " + scriptFileWatcher.getWatchPath());
-        Path tempDirectory = pythonScriptEngineConfiguration.getTempDirectory();
-        console.println("    Temp path: " + tempDirectory.toString());
-        Path venvDirectory = pythonScriptEngineConfiguration.getVEnvDirectory();
-        console.println("    VEnv path: " + venvDirectory.toString());
-
-        console.println("");
-        console.println("Python Scripting Add-on Configuration:");
-        console.println("======================================");
-        ConfigDescription configDescription = configDescriptionRegistry
-                .getConfigDescription(URI.create(PythonScriptEngineFactory.CONFIG_DESCRIPTION_URI));
-
-        if (configDescription == null) {
-            console.println("No configuration found for Python Scripting add-on. This is probably a bug.");
-            return;
-        }
-
-        List<ConfigDescriptionParameter> parameters = configDescription.getParameters();
-        Map<String, String> config = pythonScriptEngineConfiguration.getConfigurations();
-        configDescription.getParameters().forEach(parameter -> {
-            if (parameter.getGroupName() == null) {
-                console.println("  " + parameter.getName() + ": " + config.get(parameter.getName()));
-            }
-        });
-        configDescription.getParameterGroups().forEach(group -> {
-            String groupLabel = group.getLabel();
-            if (groupLabel == null) {
-                groupLabel = group.getName();
-            }
-            console.println("  " + groupLabel);
-            parameters.forEach(parameter -> {
-                if (!group.getName().equals(parameter.getGroupName())) {
-                    return;
-                }
-                console.print("    " + parameter.getName() + ": ");
-                String value = config.get(parameter.getName());
-                if (value == null) {
-                    console.println("not set");
-                } else if (value.contains("\n")) {
-                    console.println("    (multiline)");
-                    console.println("      " + value.replace("\n", "\n    "));
-                } else {
-                    console.println(value);
-                }
-            });
-            console.println("");
-        });
+        Info.show(pythonScriptEngineConfiguration, configDescriptionRegistry, console);
     }
 
     private void startConsole(Console console, String[] args) {
@@ -281,152 +203,32 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             console.println("Unknown update action '" + args[0] + "'");
             console.printUsage(getUpdateUsage());
         } else {
-            JsonElement rootElement = null;
-            Version installedVersion = pythonScriptEngineConfiguration.getInstalledHelperLibVersion();
-            Version providedVersion = pythonScriptEngineConfiguration.getProvidedHelperLibVersion();
             switch (args[0]) {
                 case UPDATE_LIST:
-                    rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
-                    if (rootElement != null) {
-                        console.println("Version             Released            Active");
-                        console.println("----------------------------------------------");
-                        if (rootElement.isJsonArray()) {
-                            JsonArray list = rootElement.getAsJsonArray();
-                            for (JsonElement element : list.asList()) {
-                                String tagName = element.getAsJsonObject().get("tag_name").getAsString();
-                                String publishString = element.getAsJsonObject().get("published_at").getAsString();
-
-                                boolean isInstalled = false;
-                                try {
-                                    Version availableVersion = PythonScriptEngineConfiguration
-                                            .parseHelperLibVersion(tagName);
-                                    if (availableVersion.equals(installedVersion)) {
-                                        isInstalled = true;
-                                    } else if (availableVersion.compareTo(providedVersion) < 0) {
-                                        continue;
-                                    }
-
-                                    DateTimeFormatter df = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss",
-                                            Locale.getDefault());
-                                    OffsetDateTime publishDate = OffsetDateTime.parse(publishString);
-                                    console.println(String.format("%-19s", tagName) + " "
-                                            + String.format("%-19s", df.format(publishDate)) + " "
-                                            + String.format("%-6s", (isInstalled ? "*" : "  ")));
-                                } catch (IllegalArgumentException e) {
-                                    // ignore not parseable version
-                                }
-                            }
-                        } else {
-                            console.println("Fetching releases failed. Invalid data");
-                        }
-                    }
+                    Update.updateList(pythonScriptEngineConfiguration, console);
                     break;
                 case UPDATE_CHECK:
-                    if (installedVersion == null) {
-                        console.println("Helper libs disabled. Skipping update.");
-                    } else {
-                        rootElement = getReleaseData(UPDATE_LATEST_URL, console);
-                        if (rootElement != null) {
-                            JsonElement tagName = rootElement.getAsJsonObject().get("tag_name");
-                            Version latestVersion = Version.parse(tagName.getAsString().substring(1));
-                            if (latestVersion.compareTo(installedVersion) > 0) {
-                                console.println("Update from version '" + installedVersion + "' to version '"
-                                        + latestVersion.toString() + "' available.");
-                            } else {
-                                console.println("Latest version '" + installedVersion + "' already installed.");
-                            }
-                        }
-                    }
+                    Update.updateCheck(pythonScriptEngineConfiguration, console);
                     break;
                 case UPDATE_INSTALL:
                     if (args.length <= 1) {
                         console.println("Missing release name");
                         console.printUsage("pythonscripting update install <\"latest\"|version>");
                     } else {
-                        String requestedVersionString = args[1];
-                        JsonObject releaseObj = null;
-                        Version releaseVersion = null;
-                        if ("latest".equals(requestedVersionString)) {
-                            rootElement = getReleaseData(UPDATE_LATEST_URL, console);
-                            if (rootElement != null) {
-                                releaseObj = rootElement.getAsJsonObject();//
-                                JsonElement tagName = releaseObj.get("tag_name");
-                                releaseVersion = PythonScriptEngineConfiguration
-                                        .parseHelperLibVersion(tagName.getAsString());
-                            }
-                        } else {
-                            try {
-                                Version requestedVersion = PythonScriptEngineConfiguration
-                                        .parseHelperLibVersion(requestedVersionString);
-                                rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
-                                if (rootElement != null) {
-                                    if (rootElement.isJsonArray()) {
-                                        JsonArray list = rootElement.getAsJsonArray();
-                                        for (JsonElement element : list.asList()) {
-                                            JsonElement tagName = element.getAsJsonObject().get("tag_name");
-                                            try {
-                                                releaseVersion = PythonScriptEngineConfiguration
-                                                        .parseHelperLibVersion(tagName.getAsString());
-                                            } catch (IllegalArgumentException e) {
-                                                continue;
-                                            }
-                                            if (releaseVersion.compareTo(requestedVersion) == 0) {
-                                                releaseObj = element.getAsJsonObject();
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            } catch (IllegalArgumentException e) {
-                                // continue, if no version was found
-                            }
-                        }
-
-                        if (releaseObj != null && releaseVersion != null) {
-                            if (releaseVersion.equals(installedVersion)) {
-                                console.println("Version '" + releaseVersion.toString() + "' already installed");
-                                break;
-                            } else if (releaseVersion.compareTo(providedVersion) < 0) {
-                                console.println("Outdated version '" + releaseVersion.toString() + "' not supported");
-                                break;
-                            }
-
-                            String zipballUrl = releaseObj.get("zipball_url").getAsString();
-
-                            try {
-                                pythonScriptEngineConfiguration.initHelperLib(zipballUrl, releaseVersion);
-                                console.println("Version '" + releaseVersion.toString() + "' installed successfully");
-                            } catch (URISyntaxException | IOException e) {
-                                console.println("Fetching release zip '" + zipballUrl + "' file failed. ");
-                                throw new IllegalArgumentException(e);
-                            }
-                        } else {
-                            console.println("Version '" + requestedVersionString + "' not found. ");
-                        }
+                        Update.updateInstall(args[1], pythonScriptEngineConfiguration, console);
                     }
                     break;
             }
         }
     }
 
-    private @Nullable JsonElement getReleaseData(String url, Console console) {
+    private void executeTyping(Console console) {
         try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
-                    .header("Accept", "application/vnd.github+json").GET().build();
-
-            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
-            if (response.statusCode() == 200) {
-                JsonElement obj = JsonParser.parseString(response.body());
-                return obj;
-            } else {
-                console.println("Fetching releases failed. Status code is " + response.statusCode());
-            }
-
-        } catch (IOException | InterruptedException e) {
-            console.println("Fetching releases failed. Request interrupted " + e.getLocalizedMessage());
+            Typing.build("org.openhab", PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH,
+                    new Typing.Logger(console));
+        } catch (Exception e) {
+            throw new IllegalArgumentException(e);
         }
-        return null;
     }
 
     private void executePip(Console console, String[] args) {
