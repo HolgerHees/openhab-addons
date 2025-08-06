@@ -101,11 +101,9 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         if (Modifier.isStatic(method.getModifiers())) {
             builder.append("    @staticmethod\n");
-            builder.append("    def " + method.getName() + "() -> " + type + ":\n        pass\n");
-        } else {
-            builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> " + type
-                    + ":\n        pass\n");
         }
+        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> " + type
+                + ":\n        pass\n");
         builder.append("\n");
 
         return builder.toString();

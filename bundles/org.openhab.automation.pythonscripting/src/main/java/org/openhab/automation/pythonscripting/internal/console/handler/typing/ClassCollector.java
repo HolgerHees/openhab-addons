@@ -60,7 +60,7 @@ public class ClassCollector {
          * }
          */
         for (Class<?> cls : clsList) {
-            // if (!cls.getSimpleName().equals("RootUIComponent")) {
+            // if (!cls.getSimpleName().equals("BusEvent")) {
             // continue;
             // }
 
