@@ -48,7 +48,7 @@ public class ClassConverter {
         List<Method> methods = container.getRelatedMethods();
         for (Method method : methods) {
 
-            classBody.append(buildClassMethod(method, containers.keySet(), imports, generics));
+            classBody.append(buildClassMethod(fullClassName, method, containers.keySet(), imports, generics));
         }
         if (imports.size() > 0) {
             classBody.insert(0, "\n\n");
@@ -70,17 +70,17 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private static String buildClassMethod(Method method, Set<String> classes, Map<String, String> imports,
-            Map<String, String> generics) {
+    private static String buildClassMethod(String fullClassName, Method method, Set<String> classes,
+            Map<String, String> imports, Map<String, String> generics) {
         Class<?>[] pType = method.getParameterTypes();
         Type[] gpType = method.getGenericParameterTypes();
 
+        Parameter[] parameters = method.getParameters();
+
         // Collect generics
         collectGenerics(method.getGenericReturnType(), method.getReturnType(), generics);
-        int i = 0;
-        for (Parameter parameter : method.getParameters()) {
+        for (int i = 0; i < parameters.length; i++) {
             collectGenerics(gpType[i], pType[i], generics);
-            i++;
         }
 
         // Collect arguments
@@ -88,11 +88,9 @@ public class ClassConverter {
         if (!Modifier.isStatic(method.getModifiers())) {
             arguments.add("self");
         }
-        i = 0;
-        for (Parameter parameter : method.getParameters()) {
+        for (int i = 0; i < parameters.length; i++) {
             String type = convertToPythonType(gpType[i], pType[i], classes, imports, generics);
-            arguments.add(parameter.getName() + ": " + type);
-            i++;
+            arguments.add(parameters[i].getName() + ": " + type);
         }
 
         String type = convertToPythonType(method.getGenericReturnType(), method.getReturnType(), classes, imports,
@@ -102,8 +100,11 @@ public class ClassConverter {
         if (Modifier.isStatic(method.getModifiers())) {
             builder.append("    @staticmethod\n");
         }
-        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> " + type
-                + ":\n        pass\n");
+        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> " + type + ":\n");
+        if (fullClassName.startsWith("org.openhab.core")) {
+            builder.append(buildDocumentationBlock(fullClassName, method, parameters));
+        }
+        builder.append("        pass\n");
         builder.append("\n");
 
         return builder.toString();
@@ -123,9 +124,10 @@ public class ClassConverter {
 
     private static void collectGenerics(Type genericType, Type type, Map<String, String> generics) {
         if (genericType instanceof TypeVariable) {
-            TypeVariable _type = (TypeVariable) genericType;
+            TypeVariable<?> _type = (TypeVariable<?>) genericType;
             if (!generics.containsKey(_type.getTypeName())) {
-                generics.put(_type.getTypeName(), _type.getBounds()[0].getTypeName());
+                String javaSubType = parseSubType(_type.getBounds()[0]);
+                generics.put(_type.getTypeName(), javaSubType);
             }
         }
     }
@@ -144,23 +146,23 @@ public class ClassConverter {
             ParameterizedType _type = (ParameterizedType) genericType;
             javaType = _type.getRawType().getTypeName();
             // System.out.println("ParameterizedType " + _type);
-            subJavaType = extractedSubType(_type.getActualTypeArguments()[0], generics);
+            subJavaType = convertSubType(_type.getActualTypeArguments()[0], generics);
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType " + _type);
             javaType = "java.lang.Class";
             if (_type.getUpperBounds().length > 0) {
-                subJavaType = extractedSubType(_type.getUpperBounds()[0], generics);
+                subJavaType = convertSubType(_type.getUpperBounds()[0], generics);
             } else if (_type.getLowerBounds().length > 0) {
-                subJavaType = extractedSubType(_type.getUpperBounds()[0], generics);
+                subJavaType = convertSubType(_type.getUpperBounds()[0], generics);
             }
         } else if (genericType instanceof GenericArrayType) {
             // TODO Not tested
             GenericArrayType _type = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType " + _type);
             javaType = "java.util.List";
-            subJavaType = extractedSubType(_type.getGenericComponentType(), generics);
+            subJavaType = convertSubType(_type.getGenericComponentType(), generics);
         } else {
             javaType = type.getTypeName();
             // System.out.println("Other " + javaType);
@@ -175,10 +177,6 @@ public class ClassConverter {
             String pythonType = convertJavaToPythonType(javaType, classes, imports);
             if ("type".equals(pythonType)) {
                 if (subJavaType != null) {
-                    Matcher matcher = EXTENDS_MATCHER.matcher(subJavaType);
-                    if (matcher.find()) {
-                        subJavaType = matcher.group(1);
-                    }
                     String subPythonType = convertJavaToPythonType(subJavaType, classes, imports);
                     return "type[" + subPythonType + "]";
                 }
@@ -195,11 +193,20 @@ public class ClassConverter {
         return "None";
     }
 
-    private static @Nullable String extractedSubType(Type type, Map<String, String> generics) {
+    private static @Nullable String convertSubType(Type type, Map<String, String> generics) {
         if (type instanceof TypeVariable) {
             return generics.get(type.getTypeName());
         }
-        return type.getTypeName();
+        return parseSubType(type);
+    }
+
+    private static String parseSubType(Type type) {
+        String typeName = type.getTypeName();
+        Matcher matcher = EXTENDS_MATCHER.matcher(typeName);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        return typeName;
     }
 
     private static String convertJavaToPythonType(String type, Set<String> classes, Map<String, String> imports) {
@@ -249,6 +256,19 @@ public class ClassConverter {
             default:
                 return type;
         }
+    }
+
+    private static String buildDocumentationBlock(String fullClassName, Method method, Parameter[] parameters) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("        \"\"\"\n");
+        builder.append("        https://www.openhab.org/javadoc/latest/");
+        builder.append(fullClassName.toLowerCase().replace(".", "/"));
+        if (parameters.length == 0) {
+            builder.append("#").append(method.getName()).append("()");
+        }
+        builder.append("\n");
+        builder.append("        \"\"\"\n");
+        return builder.toString();
     }
 
     /*
