@@ -126,6 +126,21 @@ As first, you must enable [VEnv](#enabling-venv). After this is enabled, you can
     /openhab/userdata/cache/org.openhab.automation.pythonscripting/venv/bin/pip install requests
     ```
 
+### Enable Pyhton Autocompletion
+
+Before you can enable autocompletion, you must generate the required type hint stub files. Login into [openHAB console](https://www.openhab.org/docs/administration/console.html) and run
+
+```
+pythonscripting typing
+```
+This will scan your current system for public java class methods and create corresponding python type hint stub files.
+
+![Pythonscripting typing](doc/console_pythonscripting_typing.png)
+
+The files are stored in the folder `/openhab/conf/automation/python/typings/`.
+
+As a final step, the folders `/openhab/conf/automation/python/libs/` and `/openhab>/conf/automation/python/typings/` must be added as "extraPaths" in your IDE.
+
 ## Typical log errors
 
 ### Graal python language not initialized. ...
