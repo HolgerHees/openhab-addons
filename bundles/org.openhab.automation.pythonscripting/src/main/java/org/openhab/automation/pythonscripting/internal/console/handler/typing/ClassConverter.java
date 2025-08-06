@@ -25,6 +25,8 @@ import org.openhab.automation.pythonscripting.internal.console.handler.typing.Cl
 
 @NonNullByDefault
 public class ClassConverter {
+    private static Pattern EXTENDS_MATCHER = Pattern.compile("\\? extends ([^><]+)", Pattern.CASE_INSENSITIVE);
+
     public static @Nullable String buildClass(ClassContainer container, Map<String, ClassContainer> containers)
             throws IOException, ClassNotFoundException {
         Class<?> cls = container.getRelatedClass();
@@ -32,7 +34,7 @@ public class ClassConverter {
         String simpleClassName = cls.getSimpleName();
         String fullClassName = cls.getName();
 
-        if (fullClassName.endsWith("$" + simpleClassName)) {
+        if (fullClassName.matches(".*\\$[0-9]*" + simpleClassName + "$")) {
             return null;
         }
 
@@ -48,10 +50,10 @@ public class ClassConverter {
 
             classBody.append(buildClassMethod(method, containers.keySet(), imports, generics));
         }
-        classBody.insert(0, "\n");
-        classBody.insert(0, "\n");
-
-        classBody.insert(0, buildClassImports(imports));
+        if (imports.size() > 0) {
+            classBody.insert(0, "\n\n");
+            classBody.insert(0, buildClassImports(imports));
+        }
 
         return classBody.toString();
     }
@@ -114,8 +116,7 @@ public class ClassConverter {
         line.append("class " + cls.getSimpleName());
         Class<?> parentCls = cls.getSuperclass();
         if (parentCls != null) {
-            String pythonType = convertJavaToPythonType(parentCls.getName(), imports);
-            pythonType = importPythonType(pythonType, classes, imports);
+            String pythonType = convertJavaToPythonType(parentCls.getName(), classes, imports);
             line.append("(" + pythonType + ")");
         }
         line.append(":\n");
@@ -136,29 +137,35 @@ public class ClassConverter {
         boolean isList = false;
         String javaType = null;
         String subJavaType = null;
-        if (genericType instanceof GenericArrayType) {
-            GenericArrayType _type = (GenericArrayType) genericType;
-            // System.out.println("GenericArrayType");
-
+        if (genericType instanceof TypeVariable) {
+            TypeVariable<?> _type = (TypeVariable<?>) genericType;
+            // System.out.println("TypeVariable " + _type);
+            javaType = _type.getTypeName();
+            javaType = generics.get(javaType);
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
             javaType = _type.getRawType().getTypeName();
             // System.out.println("ParameterizedType " + _type);
-            if ((_type.getActualTypeArguments()[0] instanceof TypeVariable)) {
-                subJavaType = generics.get(_type.getActualTypeArguments()[0].getTypeName());
-            } else {
-                subJavaType = _type.getActualTypeArguments()[0].getTypeName();
-            }
-        } else if (genericType instanceof TypeVariable) {
-            TypeVariable _type = (TypeVariable) genericType;
-            // System.out.println("TypeVariable " + _type);
-            javaType = _type.getTypeName();
-            javaType = generics.get(javaType);
+            subJavaType = extractedSubType(_type.getActualTypeArguments()[0], generics);
         } else if (genericType instanceof WildcardType) {
+            // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType " + _type);
+            javaType = "java.lang.Class";
+            if (_type.getUpperBounds().length > 0) {
+                subJavaType = extractedSubType(_type.getUpperBounds()[0], generics);
+            } else if (_type.getLowerBounds().length > 0) {
+                subJavaType = extractedSubType(_type.getUpperBounds()[0], generics);
+            }
+        } else if (genericType instanceof GenericArrayType) {
+            // TODO Not tested
+            GenericArrayType _type = (GenericArrayType) genericType;
+            // System.out.println("GenericArrayType " + _type);
+            javaType = "java.util.List";
+            subJavaType = extractedSubType(_type.getGenericComponentType(), generics);
         } else {
             javaType = type.getTypeName();
+            // System.out.println("Other " + javaType);
             isList = javaType.endsWith("[]");
             if (isList) {
                 subJavaType = javaType.substring(0, javaType.length() - 2);
@@ -167,25 +174,20 @@ public class ClassConverter {
         }
 
         if (javaType != null) {
-            String pythonType = convertJavaToPythonType(javaType, imports);
-            pythonType = importPythonType(pythonType, classes, imports);
+            String pythonType = convertJavaToPythonType(javaType, classes, imports);
             if ("type".equals(pythonType)) {
                 if (subJavaType != null) {
-                    String subPythonType = convertJavaToPythonType(subJavaType, imports);
-                    subPythonType = importPythonType(subPythonType, classes, imports);
+                    Matcher matcher = EXTENDS_MATCHER.matcher(subJavaType);
+                    if (matcher.find()) {
+                        subJavaType = matcher.group(1);
+                    }
+                    String subPythonType = convertJavaToPythonType(subJavaType, classes, imports);
                     return "type[" + subPythonType + "]";
                 }
                 return "type";
             } else if ("list".equals(pythonType)) {
                 if (subJavaType != null) {
-                    Pattern pattern = Pattern.compile("java\\.lang\\.Class<\\? extends ([^><]+)",
-                            Pattern.CASE_INSENSITIVE);
-                    Matcher matcher = pattern.matcher(subJavaType);
-                    if (matcher.find()) {
-                        subJavaType = matcher.group(1);
-                    }
-                    String subPythonType = convertJavaToPythonType(subJavaType, imports);
-                    subPythonType = importPythonType(subPythonType, classes, imports);
+                    String subPythonType = convertJavaToPythonType(subJavaType, classes, imports);
                     return "list[" + subPythonType + "]";
                 }
                 return "list[]";
@@ -195,10 +197,34 @@ public class ClassConverter {
         return "None";
     }
 
-    private static String convertJavaToPythonType(String type, Map<String, String> imports) {
+    private static @Nullable String extractedSubType(Type type, Map<String, String> generics) {
+        if (type instanceof TypeVariable) {
+            return generics.get(type.getTypeName());
+        }
+        return type.getTypeName();
+    }
+
+    private static String convertJavaToPythonType(String type, Set<String> classes, Map<String, String> imports) {
+        String pythonType = detectJavaToPythonType(type, imports);
+        if (pythonType.contains(".")) {
+            // (classes.contains(pythonType) || pythonType.startsWith("java.")
+            // || pythonType.startsWith("org.") || pythonType.startsWith("com."))) {
+            String moduleName = pythonType.substring(0, pythonType.lastIndexOf("."));
+            String typeName = pythonType.substring(pythonType.lastIndexOf(".") + 1);
+            imports.put(pythonType, "from " + moduleName + " import " + typeName);
+            pythonType = typeName;
+        }
+        return pythonType;
+    }
+
+    private static String detectJavaToPythonType(String type, Map<String, String> imports) {
         switch (type) {
+            case "long":
             case "int":
                 return "int";
+            case "double":
+            case "float":
+                return "float";
             case "byte":
                 return "bytes";
             case "java.lang.String":
@@ -225,20 +251,6 @@ public class ClassConverter {
             default:
                 return type;
         }
-    }
-
-    private static String importPythonType(String pythonType, Set<String> classes, Map<String, String> imports) {
-        if (pythonType != null) {
-            if (classes.contains(pythonType) || (pythonType.startsWith("java.") && !pythonType.startsWith("java.lang"))
-                    || pythonType.startsWith("javax.")) {
-                String moduleName = pythonType.substring(0, pythonType.lastIndexOf("."));
-                String typeName = pythonType.substring(pythonType.lastIndexOf(".") + 1);
-                imports.put(pythonType, "from " + moduleName + " import " + typeName);
-
-                return typeName;
-            }
-        }
-        return pythonType;
     }
 
     /*

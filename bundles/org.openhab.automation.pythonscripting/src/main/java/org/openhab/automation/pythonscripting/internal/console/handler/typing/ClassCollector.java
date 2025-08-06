@@ -60,9 +60,17 @@ public class ClassCollector {
          * }
          */
         for (Class<?> cls : clsList) {
+            // if (!cls.getSimpleName().equals("RootUIComponent")) {
+            // continue;
+            // }
 
-            List<Method> methods = Arrays.stream(cls.getDeclaredMethods())
-                    .filter(method -> Modifier.isPublic(method.getModifiers())).collect(Collectors.toList());
+            List<Method> methods = Arrays.stream(cls.getDeclaredMethods()).filter(
+                    method -> Modifier.isPublic(method.getModifiers()) && !Modifier.isVolatile(method.getModifiers()))
+                    .collect(Collectors.toList());
+
+            // for (Method method : methods) {
+            // System.out.println(method.getName() + " " + Modifier.toString(method.getModifiers()));
+            // }
 
             Collections.sort(methods, new Comparator<Method>() {
                 @Override
