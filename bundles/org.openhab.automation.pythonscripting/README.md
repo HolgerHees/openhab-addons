@@ -141,6 +141,8 @@ The files are stored in the folder `/openhab/conf/automation/python/typings/`.
 
 As a final step, the folders `/openhab/conf/automation/python/libs/` and `/openhab>/conf/automation/python/typings/` must be added as "extraPaths" in your IDE.
 
+![Pythonscripting autocompletion](doc/ide_autocompletion.png)
+
 ## Typical log errors
 
 ### Graal python language not initialized. ...
