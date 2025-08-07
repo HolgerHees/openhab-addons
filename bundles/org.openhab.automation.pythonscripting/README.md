@@ -133,7 +133,7 @@ Before you can enable autocompletion, you must generate the required type hint s
 ```
 pythonscripting typing
 ```
-This will scan your current system for public java class methods and create corresponding python type hint stub files.
+This will scan your current openHAB instance, including all installed Add-ons, for public java class methods and create corresponding python type hint stub files.
 
 ![Pythonscripting typing](doc/console_pythonscripting_typing.png)
 
