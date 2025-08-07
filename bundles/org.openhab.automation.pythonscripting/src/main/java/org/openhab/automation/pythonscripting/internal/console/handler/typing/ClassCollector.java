@@ -66,7 +66,7 @@ public class ClassCollector {
             try {
                 clsList.add(Class.forName(_import));
             } catch (ClassNotFoundException e) {
-                logger.warn("MODULE: class " + _import + " not found");
+                logger.warn("Class " + _import + " not found");
             }
         }
 
@@ -204,6 +204,10 @@ public class ClassCollector {
             this.returnClasses.add(method.getReturnType());
         }
 
+        public Method getRelatedMethod() {
+            return method;
+        }
+
         public void addParametersFrom(Method method) {
             returnTypes.add(method.getGenericReturnType());
             returnClasses.add(method.getReturnType());
@@ -280,12 +284,6 @@ public class ClassCollector {
         public int getTypeCount() {
             return types.size();
         }
-
-        /*
-         * public Parameter getParameter(int index) {
-         * return this.args.get(index);
-         * }
-         */
 
         public Type getGenericType(int index) {
             return types.get(index);

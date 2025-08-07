@@ -35,6 +35,14 @@ public class ClassConverter {
     private static Pattern EXTENDS_MATCHER = Pattern.compile("\\? extends ([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
     private static Pattern CLASS_MATCHER = Pattern.compile("([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
 
+    private static String BASE_URL;
+    static {
+        // Version version = FrameworkUtil.getBundle(OpenHAB.class).getVersion();
+        String v = "latest"; // version.getQualifier() == null || version.getQualifier().isEmpty() ? version.toString()
+                             // : "latest";
+        BASE_URL = "https://www.openhab.org/javadoc/" + v + "/";
+    }
+
     public void buildClass(ClassContainer container) throws IOException, ClassNotFoundException {
         StringBuilder classBody = new StringBuilder();
 
@@ -400,11 +408,13 @@ public class ClassConverter {
     }
 
     private @Nullable String buildClassDocumentationBlock(ClassContainer container) {
+        String classUrl = BASE_URL
+                + container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", ".");
+
         StringBuilder builder = new StringBuilder();
         builder.append("    \"\"\"\n");
         builder.append("    Java class: ").append(container.getRelatedClass().getName()).append("\n\n");
-        builder.append("    Java doc: https://www.openhab.org/javadoc/latest/");
-        builder.append(container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", "."));
+        builder.append("    Java doc: ").append(classUrl);
         builder.append("\n");
         builder.append("    \"\"\"\n");
         return builder.toString();
@@ -415,14 +425,27 @@ public class ClassConverter {
             return null;
         }
 
+        String classUrl = BASE_URL
+                + container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", ".");
+
         StringBuilder builder = new StringBuilder();
         builder.append("        \"\"\"\n");
         builder.append("        Java doc url:\n");
-        builder.append("        https://www.openhab.org/javadoc/latest/");
-        builder.append(container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", "."));
-        if (method.getParameterCount() == 0) {
-            builder.append("#").append(method.getName()).append("()");
+
+        String className = container.getRelatedClass().getName();
+        String functionRepresentation = method.getRelatedMethod().toString();
+        functionRepresentation = functionRepresentation
+                .substring(functionRepresentation.indexOf(className + "." + method.getName()) + className.length() + 1);
+
+        if (functionRepresentation.contains(" throws ")) {
+            functionRepresentation = functionRepresentation.substring(0, functionRepresentation.indexOf(" throws "));
         }
+
+        functionRepresentation = functionRepresentation.replaceAll("<>\\?", "").replace("$", ".");
+
+        // System.out.println(classUrl + "#" + functionRepresentation);
+        builder.append("        ").append(classUrl).append("#").append(functionRepresentation);
+
         builder.append("\n");
         builder.append("        \"\"\"\n");
         return builder.toString();

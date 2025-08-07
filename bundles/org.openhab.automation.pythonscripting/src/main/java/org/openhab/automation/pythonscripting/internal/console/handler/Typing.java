@@ -110,7 +110,7 @@ public class Typing {
     private static void dumpClassContentToFile(ClassContainer container, Path outputPath,
             Map<String, ClassContainer> fileContainerMap) throws IOException {
         String content = container.getBody();
-        if (content.isEmpty()) {
+        if (content == null || content.isEmpty()) {
             return;
         }
 
