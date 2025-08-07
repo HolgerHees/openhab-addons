@@ -86,7 +86,7 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory, ScriptEng
 
         /*
          * try {
-         * Typing.build("org.openhab", PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH, new Typing.Logger(logger));
+         * Typing.build(new Typing.Logger(logger));
          * } catch (Exception e) {
          * e.printStackTrace();
          * }

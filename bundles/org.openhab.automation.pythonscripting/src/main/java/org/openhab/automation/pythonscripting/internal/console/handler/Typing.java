@@ -8,10 +8,14 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
+import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassCollector;
 import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassCollector.ClassContainer;
 import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassConverter;
@@ -29,6 +33,103 @@ public class Typing {
      * // https://mypy.readthedocs.io/en/stable/stubs.html
      * }
      */
+
+    public static void build(Logger logger) throws Exception {
+
+        Path outputPath = PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH;
+
+        // Cleanup Directory
+        if (Files.isDirectory(outputPath)) {
+            try (Stream<Path> paths = Files.walk(outputPath)) {
+                paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            }
+        }
+        ClassCollector collector = new ClassCollector();
+        ClassConverter converter = new ClassConverter();
+
+        Map<String, ClassContainer> fileContainerMap = new HashMap<String, ClassContainer>();
+        Set<String> imports = new HashSet<String>();
+        // Collect Bundle Classes
+        Map<String, ClassContainer> bundleClassMap = collector.collectBundleClasses("org.openhab", logger);
+        for (ClassContainer container : bundleClassMap.values()) {
+            converter.buildClass(container);
+            imports.addAll(container.getImports());
+            dumpClassContentToFile(container, outputPath, fileContainerMap);
+        }
+
+        imports = imports.stream().filter(i -> !i.startsWith("org.openhab")).collect(Collectors.toSet());
+
+        Map<String, ClassContainer> reflectionClassMap = collector.collectReflectionClasses(imports, logger);
+        for (ClassContainer container : reflectionClassMap.values()) {
+            converter.buildClass(container);
+            dumpClassContentToFile(container, outputPath, fileContainerMap);
+        }
+
+        // Generate __init__.py Files
+        dumpInit(outputPath.toString(), fileContainerMap);
+
+        logger.info(bundleClassMap.size() + " bundle and " + reflectionClassMap.size() + " java classes processed");
+        logger.info("Total of " + (bundleClassMap.size() + reflectionClassMap.size()) + " type hint files create in '"
+                + outputPath + "'");
+    }
+
+    public static void dumpInit(String path, Map<String, ClassContainer> fileContainerMap) throws IOException {
+
+        File root = new File(path);
+        File[] list = root.listFiles();
+        if (list == null) {
+            return;
+        }
+
+        ArrayList<File> files = new ArrayList<File>();
+        for (File f : list) {
+            if (f.isDirectory()) {
+                dumpInit(f.getAbsolutePath(), fileContainerMap);
+            } else {
+                files.add(f);
+            }
+        }
+
+        if (files.size() > 0) {
+            StringBuilder initBody = new StringBuilder();
+            // List<String> modules = new ArrayList<String>();
+            for (File file : files) {
+                if (file.toString().endsWith("__init__.py")) {
+                    continue;
+                }
+                ClassContainer container = fileContainerMap.get(file.toString());
+                initBody.append("from .__" + container.getClassName().toLowerCase() + "__ import "
+                        + container.getClassName() + "\n");
+            }
+
+            String packageUrl = path.replace(".", "/") + "/__init__.py";
+            dumpContentToFile(initBody.toString(), Paths.get(packageUrl));
+        }
+    }
+
+    private static void dumpClassContentToFile(ClassContainer container, Path outputPath,
+            Map<String, ClassContainer> fileContainerMap) throws IOException {
+        String content = container.getBody();
+        if (content.isEmpty()) {
+            return;
+        }
+
+        String modulePath = container.getModuleName().replace(".", "/");
+        Path path = outputPath.resolve(modulePath).resolve("__" + container.getClassName().toLowerCase() + "__.py");
+
+        fileContainerMap.put(path.toString(), container);
+
+        dumpContentToFile(content, path);
+    }
+
+    private static void dumpContentToFile(String content, Path path) throws IOException {
+        Path parent = path.getParent();
+        File directory = parent.toFile();
+        if (!directory.exists()) {
+            directory.mkdirs();
+        }
+        Files.write(path, content.getBytes());
+    }
 
     public static class Logger {
         private Object logger;
@@ -56,84 +157,5 @@ public class Typing {
                 ((org.slf4j.Logger) logger).warn(s);
             }
         }
-    }
-
-    public static void build(String packageName, Path outputPath, Logger logger) throws Exception {
-        // Cleanup Directory
-        if (Files.isDirectory(outputPath)) {
-            try (Stream<Path> paths = Files.walk(outputPath)) {
-                paths.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-            }
-        }
-        // Collect Classes
-        Map<String, ClassContainer> classMap = ClassCollector.collectContainer(packageName, logger);
-
-        // Generate Class Files
-        Map<String, String> fileModuleMap = new HashMap<String, String>();
-        for (ClassContainer container : classMap.values()) {
-            String classBody = ClassConverter.buildClass(container, classMap);
-            if (classBody == null) {
-                continue;
-            }
-
-            String fullClassName = container.getRelatedClass().getName();
-            String fullModulePath = fullClassName.replace(".", "/");
-            String baseModulePath = fullModulePath.substring(0, fullModulePath.lastIndexOf("/"));
-            String moduleName = fullModulePath.substring(fullModulePath.lastIndexOf("/") + 1);
-
-            Path path = outputPath.resolve(baseModulePath).resolve("__" + moduleName.toLowerCase() + "__.py");
-            fileModuleMap.put(path.toString(), moduleName);
-
-            dumpContentToFile(classBody.toString(), path);
-        }
-
-        // Generate __init__.py Files
-        Path path = outputPath.resolve(packageName.replace(".", "/"));
-        dumpInit(path.toString(), fileModuleMap);
-
-        logger.info("Total of " + classMap.size() + " type hint files create in '" + outputPath + "'");
-    }
-
-    public static void dumpInit(String path, Map<String, String> fileModuleMap) throws IOException {
-
-        File root = new File(path);
-        File[] list = root.listFiles();
-        if (list == null) {
-            return;
-        }
-
-        ArrayList<File> files = new ArrayList<File>();
-        for (File f : list) {
-            if (f.isDirectory()) {
-                dumpInit(f.getAbsolutePath(), fileModuleMap);
-            } else {
-                files.add(f);
-            }
-        }
-
-        if (files.size() > 0) {
-            StringBuilder initBody = new StringBuilder();
-            // List<String> modules = new ArrayList<String>();
-            for (File file : files) {
-                if (file.toString().endsWith("__init__.py")) {
-                    continue;
-                }
-                initBody.append("from ." + file.getName().replace(".py", "") + " import "
-                        + fileModuleMap.get(file.toString()) + "\n");
-            }
-
-            String packageUrl = path.replace(".", "/") + "/__init__.py";
-            Path initPath = Paths.get(packageUrl);
-            dumpContentToFile(initBody.toString(), initPath);
-        }
-    }
-
-    private static void dumpContentToFile(String content, Path path) throws IOException {
-        Path parent = path.getParent();
-        File directory = parent.toFile();
-        if (!directory.exists()) {
-            directory.mkdirs();
-        }
-        Files.write(path, content.getBytes());
     }
 }

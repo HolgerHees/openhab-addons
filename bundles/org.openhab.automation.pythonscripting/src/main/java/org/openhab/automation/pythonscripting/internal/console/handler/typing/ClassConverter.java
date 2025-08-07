@@ -1,15 +1,15 @@
 package org.openhab.automation.pythonscripting.internal.console.handler.typing;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.lang.reflect.GenericArrayType;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.lang.reflect.Parameter;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,47 +18,45 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassCollector.ClassContainer;
+import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassCollector.MethodContainer;
+import org.openhab.automation.pythonscripting.internal.console.handler.typing.ClassCollector.ParameterContainer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @NonNullByDefault
 public class ClassConverter {
-    private static Pattern EXTENDS_MATCHER = Pattern.compile("\\? extends ([^><]+)", Pattern.CASE_INSENSITIVE);
+    private final Logger logger = LoggerFactory.getLogger(ClassConverter.class);
 
-    public static @Nullable String buildClass(ClassContainer container, Map<String, ClassContainer> containers)
-            throws IOException, ClassNotFoundException {
-        Class<?> cls = container.getRelatedClass();
+    private static Pattern EXTENDS_MATCHER = Pattern.compile("\\? extends ([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
+    private static Pattern CLASS_MATCHER = Pattern.compile("([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
 
-        String simpleClassName = cls.getSimpleName();
-        String fullClassName = cls.getName();
-
-        if (fullClassName.matches(".*\\$[0-9]*" + simpleClassName + "$")) {
-            return null;
-        }
-
+    public void buildClass(ClassContainer container) throws IOException, ClassNotFoundException {
         StringBuilder classBody = new StringBuilder();
 
         Map<String, String> generics = new HashMap<String, String>();
         Map<String, String> imports = new HashMap<String, String>();
 
-        classBody.append(buildClassHead(cls, containers.keySet(), imports));
+        classBody.append(buildClassHead(container, imports, generics));
 
-        List<Method> methods = container.getRelatedMethods();
-        for (Method method : methods) {
+        List<MethodContainer> methods = container.getRelatedMethods();
+        for (MethodContainer method : methods) {
 
-            classBody.append(buildClassMethod(fullClassName, method, containers.keySet(), imports, generics));
+            classBody.append(buildClassMethod(container, method, imports, generics));
         }
         if (imports.size() > 0) {
             classBody.insert(0, "\n\n");
             classBody.insert(0, buildClassImports(imports));
         }
 
-        return classBody.toString();
+        container.setClassStub(classBody.toString(), imports.keySet());
     }
 
-    private static Object buildClassImports(Map<String, String> imports) {
+    private Object buildClassImports(Map<String, String> imports) {
         StringBuilder builder = new StringBuilder();
         HashSet<String> hashSet = new HashSet<>(imports.values());
         ArrayList<String> sortedImports = new ArrayList<>(hashSet);
@@ -70,17 +68,17 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private static String buildClassMethod(String fullClassName, Method method, Set<String> classes,
-            Map<String, String> imports, Map<String, String> generics) {
-        Class<?>[] pType = method.getParameterTypes();
-        Type[] gpType = method.getGenericParameterTypes();
-
-        Parameter[] parameters = method.getParameters();
+    private String buildClassMethod(ClassContainer container, MethodContainer method, Map<String, String> imports,
+            Map<String, String> generics) {
 
         // Collect generics
-        collectGenerics(method.getGenericReturnType(), method.getReturnType(), generics);
-        for (int i = 0; i < parameters.length; i++) {
-            collectGenerics(gpType[i], pType[i], generics);
+        for (int i = 0; i < method.getReturnTypeCount(); i++) {
+            collectGenerics(method.getGenericReturnType(i), method.getReturnType(i), generics);
+        }
+        for (ParameterContainer p : method.getParameters()) {
+            for (int i = 0; i < p.getTypeCount(); i++) {
+                collectGenerics(p.getGenericType(i), p.getType(i), generics);
+            }
         }
 
         // Collect arguments
@@ -88,41 +86,144 @@ public class ClassConverter {
         if (!Modifier.isStatic(method.getModifiers())) {
             arguments.add("self");
         }
-        for (int i = 0; i < parameters.length; i++) {
-            String type = convertToPythonType(gpType[i], pType[i], classes, imports, generics);
-            arguments.add(parameters[i].getName() + ": " + type);
+        for (ParameterContainer p : method.getParameters()) {
+            Set<String> parameterTypes = new HashSet<String>();
+            for (int i = 0; i < p.getTypeCount(); i++) {
+                String t = convertToPythonType(container, p.getGenericType(i), p.getType(i), imports, generics, true);
+                parameterTypes.add(t);
+            }
+            List<String> sortedParameterTypes = parameterTypes.stream().sorted().collect(Collectors.toList());
+            arguments.add(
+                    p.getName() + ": " + String.join(" | ", sortedParameterTypes) + (p.isOptional ? " = None" : ""));
         }
 
-        String type = convertToPythonType(method.getGenericReturnType(), method.getReturnType(), classes, imports,
-                generics);
+        // Collect Return types
+        Set<String> returnTypes = new HashSet<String>();
+        for (int i = 0; i < method.getReturnTypeCount(); i++) {
+            String t = convertToPythonType(container, method.getGenericReturnType(i), method.getReturnType(i), imports,
+                    generics, false);
+            returnTypes.add(t);
+        }
+        List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
 
         StringBuilder builder = new StringBuilder();
         if (Modifier.isStatic(method.getModifiers())) {
             builder.append("    @staticmethod\n");
         }
-        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> " + type + ":\n");
-        if (fullClassName.startsWith("org.openhab.core")) {
-            builder.append(buildDocumentationBlock(fullClassName, method, parameters));
+        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> "
+                + String.join(" | ", sortedReturnTypes) + ":\n");
+        String doc = buildMethodDocumentationBlock(container, method);
+        if (doc != null) {
+            builder.append(doc);
+        } else {
+            builder.append("        pass\n");
         }
-        builder.append("        pass\n");
         builder.append("\n");
 
         return builder.toString();
     }
 
-    private static String buildClassHead(Class<?> cls, Set<String> classes, Map<String, String> imports) {
-        StringBuilder line = new StringBuilder();
-        line.append("class " + cls.getSimpleName());
+    private String buildClassHead(ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
+        StringBuilder builder = new StringBuilder();
+        Class<?> cls = container.getRelatedClass();
+
+        String packageName = cls.getName();
+        String moduleName = ClassContainer.parseModuleName(packageName);
+        container.setModuleName(moduleName);
+        String className = ClassContainer.parseClassName(packageName);
+        container.setClassName(className);
+
+        builder.append("class " + container.getClassName());
         Class<?> parentCls = cls.getSuperclass();
         if (parentCls != null) {
-            String pythonType = convertJavaToPythonType(parentCls.getName(), classes, imports);
-            line.append("(" + pythonType + ")");
+            String pythonType = convertBaseJavaToPythonType(parentCls.getName(), container, imports, generics);
+            builder.append("(" + pythonType + ")");
         }
-        line.append(":\n");
-        return line.toString();
+        builder.append(":\n");
+        String doc = buildClassDocumentationBlock(container);
+        if (doc != null) {
+            builder.append(doc);
+            builder.append("\n");
+        }
+
+        boolean hasFields = false;
+        for (Field field : container.getRelatedFields()) {
+            try {
+                String type = convertToPythonType(container, field.getGenericType(), field.getType(), imports, generics,
+                        true);
+                String value = "";
+                Class<?> t = field.getType();
+
+                if (Collection.class.isAssignableFrom(field.getType())) {
+                    List<String> values = new ArrayList<String>();
+                    Collection<Object> _values = (Collection<Object>) field.get(null);
+                    for (Object _value : _values) {
+                        values.add(buildValue(_value));
+                    }
+                    value = "[" + String.join(",", values) + "]";
+                } else if (t == short.class) {
+                    value = buildValue(field.getShort(null));
+                } else if (t == int.class) {
+                    value = buildValue(field.getInt(null));
+                } else if (t == long.class) {
+                    value = buildValue(field.getLong(null));
+                } else if (t == float.class) {
+                    value = buildValue(field.getFloat(null));
+                } else if (t == double.class) {
+                    value = buildValue(field.getDouble(null));
+                } else if (t == boolean.class) {
+                    value = buildValue(field.getBoolean(null));
+                } else if (t == char.class) {
+                    value = buildValue(field.getChar(null));
+                } else {
+                    value = buildValue(field.get(null).toString());
+                }
+
+                builder.append("    " + field.getName() + ": " + type + " = " + value + "\n");
+                hasFields = true;
+            } catch (IllegalArgumentException | IllegalAccessException e) {
+                logger.warn("Cant convert static field {} of class {}", container.getRelatedClass().getName(),
+                        field.getName(), e);
+            }
+        }
+        if (hasFields) {
+            builder.append("\n");
+        }
+
+        return builder.toString();
     }
 
-    private static void collectGenerics(Type genericType, Type type, Map<String, String> generics) {
+    private String buildValue(Object value) {
+        if (value instanceof Number) {
+            return value.toString();
+        }
+        if (value instanceof Boolean) {
+            return ((Boolean) value) ? "True" : "False";
+        }
+        return "\"" + value.toString() + "\"";
+    }
+    /*
+     * if (value.class.isNestmateOf(short.class)) {
+     * return String.valueOf(field.getShort(null));
+     * } else if (t == int.class) {
+     * value = String.valueOf(field.getInt(null));
+     * } else if (t == long.class) {
+     * value = String.valueOf(field.getLong(null));
+     * } else if (t == float.class) {
+     * value = String.valueOf(field.getFloat(null));
+     * } else if (t == double.class) {
+     * value = String.valueOf(field.getDouble(null));
+     * } else if (t == boolean.class) {
+     * value = String.valueOf(field.getBoolean(null) ? "True" : "False");
+     * } else if (t == char.class) {
+     * value = "\"" + String.valueOf(field.getChar(null)) + "\"";
+     * } else {
+     * value = "\"" + field.get(null).toString() + "\"";
+     * }
+     * }
+     */
+
+    private void collectGenerics(Type genericType, Type type, Map<String, String> generics) {
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             if (!generics.containsKey(_type.getTypeName())) {
@@ -132,8 +233,8 @@ public class ClassConverter {
         }
     }
 
-    private static String convertToPythonType(Type genericType, Type type, Set<String> classes,
-            Map<String, String> imports, Map<String, String> generics) {
+    private String convertToPythonType(ClassContainer container, Type genericType, Type type,
+            Map<String, String> imports, Map<String, String> generics, boolean isArgument) {
         boolean isList = false;
         String javaType = null;
         String subJavaType = null;
@@ -174,96 +275,152 @@ public class ClassConverter {
         }
 
         if (javaType != null) {
-            String pythonType = convertJavaToPythonType(javaType, classes, imports);
-            if ("type".equals(pythonType)) {
-                if (subJavaType != null) {
-                    String subPythonType = convertJavaToPythonType(subJavaType, classes, imports);
-                    return "type[" + subPythonType + "]";
-                }
-                return "type";
-            } else if ("list".equals(pythonType)) {
-                if (subJavaType != null) {
-                    String subPythonType = convertJavaToPythonType(subJavaType, classes, imports);
-                    return "list[" + subPythonType + "]";
-                }
-                return "list[]";
+            if (isArgument) {
+                return convertJavaArgumentToPythonType(javaType, subJavaType, container, imports, generics);
             }
-            return pythonType;
+            return convertJavaReturnToPythonType(javaType, subJavaType, container, imports, generics);
         }
         return "None";
     }
 
-    private static @Nullable String convertSubType(Type type, Map<String, String> generics) {
+    private @Nullable String convertSubType(Type type, Map<String, String> generics) {
         if (type instanceof TypeVariable) {
             return generics.get(type.getTypeName());
         }
         return parseSubType(type);
     }
 
-    private static String parseSubType(Type type) {
+    private String parseSubType(Type type) {
         String typeName = type.getTypeName();
         Matcher matcher = EXTENDS_MATCHER.matcher(typeName);
         if (matcher.find()) {
-            return matcher.group(1);
+            typeName = matcher.group(1);
+        }
+        matcher = CLASS_MATCHER.matcher(typeName);
+        if (matcher.find()) {
+            typeName = matcher.group(1);
         }
         return typeName;
     }
 
-    private static String convertJavaToPythonType(String type, Set<String> classes, Map<String, String> imports) {
-        String pythonType = detectJavaToPythonType(type, imports);
-        if (pythonType.contains(".")) {
-            // (classes.contains(pythonType) || pythonType.startsWith("java.")
-            // || pythonType.startsWith("org.") || pythonType.startsWith("com."))) {
-            String moduleName = pythonType.substring(0, pythonType.lastIndexOf("."));
-            String typeName = pythonType.substring(pythonType.lastIndexOf(".") + 1);
-            imports.put(pythonType, "from " + moduleName + " import " + typeName);
-            pythonType = typeName;
+    private String convertJavaArgumentToPythonType(String mainJavaType, @Nullable String subJavaType,
+            ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
+        switch (mainJavaType) {
+            case "java.lang.Byte":
+                return "bytes";
+            case "java.lang.Double":
+            case "java.lang.Float":
+                return "float";
+            case "java.lang.BigDecimal":
+            case "java.lang.BigInteger":
+            case "java.lang.Long":
+            case "java.lang.Integer":
+            case "java.lang.Short":
+                return "int";
+            case "java.lang.Number":
+                return "float | int";
+            case "java.util.Map":
+                return "dict";
+            case "java.util.List":
+            case "java.util.Set":
+                if (subJavaType != null) {
+                    String subPythonType = convertJavaArgumentToPythonType(subJavaType, null, container, imports,
+                            generics);
+                    return "list[" + subPythonType + "]";
+                }
+                return "list[]";
+            case "java.lang.Class":
+                if (subJavaType != null) {
+                    String subPythonType = convertJavaArgumentToPythonType(subJavaType, null, container, imports,
+                            generics);
+                    return subPythonType;
+                }
+                return "any";
         }
-        return pythonType;
+
+        return convertJavaReturnToPythonType(mainJavaType, subJavaType, container, imports, generics);
     }
 
-    private static String detectJavaToPythonType(String type, Map<String, String> imports) {
-        switch (type) {
+    private String convertJavaReturnToPythonType(String mainJavaType, @Nullable String subJavaType,
+            ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
+        switch (mainJavaType) {
+            case "char":
+                return "str";
             case "long":
             case "int":
+            case "short":
                 return "int";
             case "double":
             case "float":
                 return "float";
             case "byte":
                 return "bytes";
+            case "boolean":
+                return "bool";
+            case "void":
+                return "None";
+            case "?":
+                return "any";
+        }
+
+        return convertBaseJavaToPythonType(mainJavaType, container, imports, generics);
+    }
+
+    private String convertBaseJavaToPythonType(String javaType, ClassContainer container, Map<String, String> imports,
+            Map<String, String> generics) {
+        switch (javaType) {
             case "java.lang.String":
                 return "str";
             case "java.lang.Object":
                 return "object";
-            case "java.lang.Class":
-                return "type";
-            case "java.util.Map":
-                return "dict";
-            case "java.util.List":
-            case "java.util.Set":
-                return "list";
-            case "boolean":
-                return "bool";
             case "java.time.ZonedDateTime":
                 imports.put("java.time.ZonedDateTime", "from datetime import datetime");
                 return "datetime";
             case "java.time.Instant":
                 imports.put("java.time.Instant", "from datetime import datetime");
                 return "datetime";
-            case "void":
-                return "None";
             default:
-                return type;
+                if (javaType.contains(".")) {
+                    String className = ClassContainer.parseClassName(javaType);
+                    // Handle import
+                    if (!className.equals(container.getClassName())) {
+                        String moduleName = ClassContainer.parseModuleName(javaType);
+                        imports.put(javaType, "from " + moduleName + " import " + className);
+                        return className;
+                    }
+                    return "\"" + className + "\"";
+                } else if (javaType.length() == 1) {
+                    String _javaType = generics.get(javaType);
+                    if (_javaType != null) {
+                        return _javaType;
+                    }
+                }
+                return javaType;
         }
     }
 
-    private static String buildDocumentationBlock(String fullClassName, Method method, Parameter[] parameters) {
+    private @Nullable String buildClassDocumentationBlock(ClassContainer container) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("    \"\"\"\n");
+        builder.append("    Java class: ").append(container.getRelatedClass().getName()).append("\n\n");
+        builder.append("    Java doc: https://www.openhab.org/javadoc/latest/");
+        builder.append(container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", "."));
+        builder.append("\n");
+        builder.append("    \"\"\"\n");
+        return builder.toString();
+    }
+
+    private @Nullable String buildMethodDocumentationBlock(ClassContainer container, MethodContainer method) {
+        if (!container.getModuleName().startsWith("org.openhab.core")) {
+            return null;
+        }
+
         StringBuilder builder = new StringBuilder();
         builder.append("        \"\"\"\n");
+        builder.append("        Java doc url:\n");
         builder.append("        https://www.openhab.org/javadoc/latest/");
-        builder.append(fullClassName.toLowerCase().replace(".", "/"));
-        if (parameters.length == 0) {
+        builder.append(container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", "."));
+        if (method.getParameterCount() == 0) {
             builder.append("#").append(method.getName()).append("()");
         }
         builder.append("\n");

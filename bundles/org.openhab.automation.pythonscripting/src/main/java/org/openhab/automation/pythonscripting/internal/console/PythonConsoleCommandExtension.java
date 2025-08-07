@@ -224,8 +224,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
 
     private void executeTyping(Console console) {
         try {
-            Typing.build("org.openhab", PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH,
-                    new Typing.Logger(console));
+            Typing.build(new Typing.Logger(console));
         } catch (Exception e) {
             throw new IllegalArgumentException(e);
         }
