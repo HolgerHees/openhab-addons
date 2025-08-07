@@ -76,7 +76,7 @@ The [openHAB Console](https://www.openhab.org/docs/administration/console.html) 
 
 4. `pythonscripting pip` allowes you check, install or remove external python modules.<br/><br/>Check [pip usage](#using-pip-to-install-external-modules) for details
 
-5. `pythonscripting typing` generates python typ hint stub files.<br/><br/>Check [python autocompletion](#enable-pyhton-autocompletion) for details
+5. `pythonscripting typing` generates python type hint stub files.<br/><br/>Check [python autocompletion](#enable-pyhton-autocompletion) for details
 
 ### Enabling VEnv
 
