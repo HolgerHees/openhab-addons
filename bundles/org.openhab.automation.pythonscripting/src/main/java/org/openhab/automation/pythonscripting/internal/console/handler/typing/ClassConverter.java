@@ -61,13 +61,13 @@ public class ClassConverter {
         BASE_URL = "https://www.openhab.org/javadoc/" + v + "/";
     }
 
-    private final Map<String, String> generics;
+    private final Map<String, String> classGenerics;
     private final Map<String, String> imports;
     private final ClassContainer container;
 
     public ClassConverter(ClassContainer container) {
         this.container = container;
-        this.generics = new HashMap<String, String>();
+        this.classGenerics = new HashMap<String, String>();
         this.imports = new HashMap<String, String>();
     }
 
@@ -113,19 +113,24 @@ public class ClassConverter {
     }
 
     private String buildClassHead() {
+        Type type = container.getRelatedClass().getGenericSuperclass();
+        if (type != null) {
+            classGenerics.putAll(collectGenerics(type));
+        }
+
         StringBuilder builder = new StringBuilder();
         builder.append("class " + container.getPythonClassName());
         List<String> parentTypes = new ArrayList<String>();
         Class<?> parentClass = container.getRelatedClass().getSuperclass();
         if (parentClass != null) {
-            String pythonType = convertBaseJavaToPythonType(parentClass.getName());
+            String pythonType = convertBaseJavaToPythonType(parentClass.getName(), classGenerics);
             if (!"object".equals(pythonType)) {
                 parentTypes.add(pythonType);
             }
         }
         Class<?>[] parentInterfaces = container.getRelatedClass().getInterfaces();
         for (Class<?> parentInterface : parentInterfaces) {
-            String pythonType = convertBaseJavaToPythonType(parentInterface.getName());
+            String pythonType = convertBaseJavaToPythonType(parentInterface.getName(), classGenerics);
             parentTypes.add(pythonType);
         }
         if (parentTypes.isEmpty()) {
@@ -145,7 +150,8 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         for (Field field : container.getFields()) {
             try {
-                String type = convertJavatToPythonType(collectJavaTypes(field.getGenericType()));
+                List<String> javaTypes = collectJavaTypes(field.getGenericType(), classGenerics);
+                String type = convertJavatToPythonType(javaTypes, classGenerics);
                 String value = "";
                 Class<?> t = field.getType();
 
@@ -190,13 +196,14 @@ public class ClassConverter {
 
     private String buildClassMethod(MethodContainer method) {
 
+        HashMap<String, String> localGenerics = new HashMap<String, String>(this.classGenerics);
         // Collect generics
         for (int i = 0; i < method.getReturnTypeCount(); i++) {
-            collectGenerics(method.getGenericReturnType(i));
+            localGenerics.putAll(collectGenerics(method.getGenericReturnType(i)));
         }
         for (ParameterContainer p : method.getParameters()) {
             for (int i = 0; i < p.getTypeCount(); i++) {
-                collectGenerics(p.getGenericType(i));
+                localGenerics.putAll(collectGenerics(p.getGenericType(i)));
             }
         }
 
@@ -208,7 +215,8 @@ public class ClassConverter {
         for (ParameterContainer p : method.getParameters()) {
             Set<String> parameterTypes = new HashSet<String>();
             for (int i = 0; i < p.getTypeCount(); i++) {
-                String t = convertJavatToPythonType(collectJavaTypes(p.getGenericType(i)));
+                List<String> javaTypes = collectJavaTypes(p.getGenericType(i), localGenerics);
+                String t = convertJavatToPythonType(javaTypes, localGenerics);
                 parameterTypes.add(t);
             }
             List<String> sorted = parameterTypes.stream().sorted().collect(Collectors.toList());
@@ -228,7 +236,8 @@ public class ClassConverter {
             // Collect Return types
             Set<String> returnTypes = new HashSet<String>();
             for (int i = 0; i < method.getReturnTypeCount(); i++) {
-                String t = convertJavatToPythonType(collectJavaTypes(method.getGenericReturnType(i)));
+                List<String> javaTypes = collectJavaTypes(method.getGenericReturnType(i), localGenerics);
+                String t = convertJavatToPythonType(javaTypes, localGenerics);
                 returnTypes.add(t);
             }
             List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
@@ -271,7 +280,7 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private List<String> collectJavaTypes(Type genericType) {
+    private List<String> collectJavaTypes(Type genericType, Map<String, String> generics) {
         List<String> types = new ArrayList<String>();
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
@@ -283,18 +292,18 @@ public class ClassConverter {
             ParameterizedType _type = (ParameterizedType) genericType;
             // System.out.println("ParameterizedType | " + _type + " | " + _type.getRawType().getTypeName() + " | "
             // + _type.getActualTypeArguments()[0]);
-            types.addAll(collectJavaTypes(_type.getRawType()));
+            types.addAll(collectJavaTypes(_type.getRawType(), generics));
             if (_type.getActualTypeArguments().length > 0) {
-                types.addAll(collectJavaTypes(_type.getActualTypeArguments()[0]));
+                types.addAll(collectJavaTypes(_type.getActualTypeArguments()[0], generics));
             }
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType | " + _type);
             if (_type.getUpperBounds().length > 0) {
-                types.addAll(collectJavaTypes(_type.getUpperBounds()[0]));
+                types.addAll(collectJavaTypes(_type.getUpperBounds()[0], generics));
             } else if (_type.getLowerBounds().length > 0) {
-                types.addAll(collectJavaTypes(_type.getLowerBounds()[0]));
+                types.addAll(collectJavaTypes(_type.getLowerBounds()[0], generics));
             } else {
                 types.add("java.lang.Class");
             }
@@ -303,7 +312,7 @@ public class ClassConverter {
             GenericArrayType _type = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType | " + _type);
             types.add("java.util.List");
-            types.addAll(collectJavaTypes(_type.getGenericComponentType()));
+            types.addAll(collectJavaTypes(_type.getGenericComponentType(), generics));
         } else {
             // System.out.println("OtherType | " + genericType.getTypeName());
             String type = genericType.getTypeName();
@@ -326,7 +335,7 @@ public class ClassConverter {
         return types;
     }
 
-    private String convertJavatToPythonType(List<String> types) {
+    private String convertJavatToPythonType(List<String> types, Map<String, String> generics) {
         if (types.isEmpty()) {
             logger.warn("ConvertToPythonType for type '{}' is empty for class {}", types,
                     container.getRelatedClass().getName());
@@ -364,30 +373,30 @@ public class ClassConverter {
             case "java.util.List":
             case "java.util.Set":
                 if (!types.isEmpty()) {
-                    return "list[" + convertJavatToPythonType(types) + "]";
+                    return "list[" + convertJavatToPythonType(types, generics) + "]";
                 }
                 return "list";
             case "java.util.Map":
             case "java.util.HashMap":
             case "java.util.Hashtable":
                 if (!types.isEmpty()) {
-                    return "dict[" + convertJavatToPythonType(types) + "]";
+                    return "dict[" + convertJavatToPythonType(types, generics) + "]";
                 }
                 return "dict";
             case "?":
             case "java.lang.Class":
                 if (!types.isEmpty()) {
-                    return convertJavatToPythonType(types);
+                    return convertJavatToPythonType(types, generics);
                 }
                 return "any";
             case "void":
                 return "None";
         }
 
-        return convertBaseJavaToPythonType(javaType);
+        return convertBaseJavaToPythonType(javaType, generics);
     }
 
-    private String convertBaseJavaToPythonType(String javaType) {
+    private String convertBaseJavaToPythonType(String javaType, Map<String, String> generics) {
         switch (javaType) {
             case "java.lang.String":
                 return "str";
@@ -433,7 +442,11 @@ public class ClassConverter {
         return "\"" + value.toString() + "\"";
     }
 
-    private void collectGenerics(Type genericType) {
+    private Map<String, String> collectGenerics(Type genericType) {
+        return collectGenerics(genericType, new HashMap<String, String>());
+    }
+
+    private Map<String, String> collectGenerics(Type genericType, Map<String, String> generics) {
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             if (!generics.containsKey(_type.getTypeName())) {
@@ -441,22 +454,23 @@ public class ClassConverter {
             }
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
-            collectGenerics(_type.getRawType());
+            generics.putAll(collectGenerics(_type.getRawType(), generics));
             for (Type _genericType : _type.getActualTypeArguments()) {
-                collectGenerics(_genericType);
+                generics.putAll(collectGenerics(_genericType, generics));
             }
         } else if (genericType instanceof WildcardType) {
             WildcardType _type = (WildcardType) genericType;
             if (_type.getUpperBounds().length > 0) {
                 for (Type _genericType : _type.getUpperBounds()) {
-                    collectGenerics(_genericType);
+                    generics.putAll(collectGenerics(_genericType, generics));
                 }
             } else if (_type.getLowerBounds().length > 0) {
                 for (Type _genericType : _type.getLowerBounds()) {
-                    collectGenerics(_genericType);
+                    generics.putAll(collectGenerics(_genericType, generics));
                 }
             }
         }
+        return generics;
     }
 
     private String cleanClassName(String className) {
