@@ -383,8 +383,12 @@ public class ClassConverter {
                     return "dict[" + convertJavatToPythonType(types, generics) + "]";
                 }
                 return "dict";
-            case "?":
             case "java.lang.Class":
+                if (!types.isEmpty()) {
+                    return "type[" + convertJavatToPythonType(types, generics) + "]";
+                }
+                return "type";
+            case "?":
                 if (!types.isEmpty()) {
                     return convertJavatToPythonType(types, generics);
                 }
