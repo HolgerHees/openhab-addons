@@ -51,7 +51,7 @@ public class ClassConverter {
     private final Logger logger = LoggerFactory.getLogger(ClassConverter.class);
 
     private static Pattern CLASS_MATCHER = Pattern
-            .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
+            .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$_]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
 
     private static String BASE_URL;
     static {
@@ -145,7 +145,7 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         for (Field field : container.getFields()) {
             try {
-                String type = convertToPythonType(field.getGenericType());
+                String type = convertJavatToPythonType(collectJavaTypes(field.getGenericType()));
                 String value = "";
                 Class<?> t = field.getType();
 
@@ -208,7 +208,7 @@ public class ClassConverter {
         for (ParameterContainer p : method.getParameters()) {
             Set<String> parameterTypes = new HashSet<String>();
             for (int i = 0; i < p.getTypeCount(); i++) {
-                String t = convertToPythonType(p.getGenericType(i));
+                String t = convertJavatToPythonType(collectJavaTypes(p.getGenericType(i)));
                 parameterTypes.add(t);
             }
             List<String> sorted = parameterTypes.stream().sorted().collect(Collectors.toList());
@@ -228,7 +228,7 @@ public class ClassConverter {
             // Collect Return types
             Set<String> returnTypes = new HashSet<String>();
             for (int i = 0; i < method.getReturnTypeCount(); i++) {
-                String t = convertToPythonType(method.getGenericReturnType(i));
+                String t = convertJavatToPythonType(collectJavaTypes(method.getGenericReturnType(i)));
                 returnTypes.add(t);
             }
             List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
@@ -271,7 +271,7 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private String convertToPythonType(Type genericType) {
+    private List<String> collectJavaTypes(Type genericType) {
         List<String> types = new ArrayList<String>();
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
@@ -279,25 +279,22 @@ public class ClassConverter {
             if (type != null) {
                 types.add(type);
             }
-            /*
-             * else if (_type.getBounds().length > 0) {
-             * types.add(convertToPythonType(_type.getBounds()[0]));
-             * }
-             */
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
             // System.out.println("ParameterizedType | " + _type + " | " + _type.getRawType().getTypeName() + " | "
             // + _type.getActualTypeArguments()[0]);
-            types.add(convertToPythonType(_type.getRawType()));
-            types.add(convertToPythonType(_type.getActualTypeArguments()[0]));
+            types.addAll(collectJavaTypes(_type.getRawType()));
+            if (_type.getActualTypeArguments().length > 0) {
+                types.addAll(collectJavaTypes(_type.getActualTypeArguments()[0]));
+            }
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType | " + _type);
             if (_type.getUpperBounds().length > 0) {
-                types.add(convertToPythonType(_type.getUpperBounds()[0]));
+                types.addAll(collectJavaTypes(_type.getUpperBounds()[0]));
             } else if (_type.getLowerBounds().length > 0) {
-                types.add(convertToPythonType(_type.getLowerBounds()[0]));
+                types.addAll(collectJavaTypes(_type.getLowerBounds()[0]));
             } else {
                 types.add("java.lang.Class");
             }
@@ -306,7 +303,7 @@ public class ClassConverter {
             GenericArrayType _type = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType | " + _type);
             types.add("java.util.List");
-            types.add(convertToPythonType(_type.getGenericComponentType()));
+            types.addAll(collectJavaTypes(_type.getGenericComponentType()));
         } else {
             // System.out.println("OtherType | " + genericType.getTypeName());
             String type = genericType.getTypeName();
@@ -317,16 +314,25 @@ public class ClassConverter {
             types.add(type);
         }
 
-        if (!types.isEmpty()) {
-            return convertJavatToPythonType(types);
-        }
+        /*
+         * if (container.getRelatedClass().getSimpleName().equals("DateTimeItem")) {
+         * System.out.println("---- " + genericType.getTypeName());
+         * for (String _type : types) {
+         * System.out.println(_type);
+         * }
+         * }
+         */
 
-        // logger.warn("ConvertToPythonType for type '{}' is empty for class {}", genericType.getTypeName(),
-        // container.getRelatedClass().getName());
-        return "any";
+        return types;
     }
 
     private String convertJavatToPythonType(List<String> types) {
+        if (types.isEmpty()) {
+            logger.warn("ConvertToPythonType for type '{}' is empty for class {}", types,
+                    container.getRelatedClass().getName());
+            return "any";
+        }
+
         String javaType = types.remove(0);
         switch (javaType) {
             case "char":
@@ -394,6 +400,7 @@ public class ClassConverter {
                 imports.put("__java.time.Instant", "from datetime import datetime");
                 return "datetime";
             default:
+                javaType = cleanClassName(javaType);
                 if (javaType.contains(".")) {
                     String className = ClassContainer.parsePythonClassName(javaType);
                     // Handle import
@@ -430,20 +437,7 @@ public class ClassConverter {
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             if (!generics.containsKey(_type.getTypeName())) {
-                /*
-                 * for (Type _genericType : _type.getBounds()) {
-                 * System.out.println(_type.getTypeName() + " " + _genericType.getTypeName() + " "
-                 * + (_genericType instanceof Type));
-                 * }
-                 */
-                String javaSubType = _type.getBounds()[0].getTypeName();
-                Matcher matcher = CLASS_MATCHER.matcher(javaSubType);
-                if (matcher.find() && !javaSubType.equals(matcher.group(1))) {
-                    // System.out.println("parseSubType: " + container.getRelatedClass().getName() + " | " + javaSubType
-                    // + " | " + matcher.group(1));
-                    javaSubType = matcher.group(1);
-                }
-                generics.put(_type.getTypeName(), javaSubType);
+                generics.put(_type.getTypeName(), cleanClassName(_type.getBounds()[0].getTypeName()));
             }
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
@@ -463,6 +457,16 @@ public class ClassConverter {
                 }
             }
         }
+    }
+
+    private String cleanClassName(String className) {
+        Matcher matcher = CLASS_MATCHER.matcher(className);
+        if (matcher.find() && !className.equals(matcher.group(1))) {
+            // System.out.println("parseSubType: " + container.getRelatedClass().getName() + " | "
+            // + _type.getTypeName() + " | " + javaSubType + " | " + matcher.group(1));
+            return matcher.group(1);
+        }
+        return className;
     }
 
     private @Nullable String buildClassDocumentationBlock() {
