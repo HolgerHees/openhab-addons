@@ -270,8 +270,7 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
                     .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
             if (scriptDependencyListener == null) {
-                logger.warn(
-                        "Failed to retrieve script dependency listener from engine bindings. Script dependency tracking will be disabled for engine '{}'.",
+                logger.info("No dependency listener found. Script dependency tracking disabled for engine '{}'.",
                         this.engineIdentifier);
             } else {
                 this.delegatingFileSystem.setAccessConsumer(new Consumer<Path>() {
@@ -304,31 +303,37 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
             if (scriptExtensionAccessor == null) {
-                throw new IllegalStateException("Failed to retrieve script extension accessor from engine bindings");
-            }
+                logger.info("No Script accessor found. Scope injection disabled for engine {}", this.engineIdentifier);
+            } else {
+                // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
+                BiFunction<String, List<String>, Object> wrapImportFn = (name,
+                        fromlist) -> scriptExtensionModuleProvider
+                                .locatorFor(getPolyglotContext(), this.engineIdentifier, scriptExtensionAccessor)
+                                .locateModule(name, fromlist);
+                getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME,
+                        wrapImportFn);
+                try {
+                    String wrapperContent = new String(
+                            Files.readAllBytes(PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH));
+                    getPolyglotContext()
+                            .eval(Source
+                                    .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, wrapperContent,
+                                            PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH.toString())
+                                    .build());
 
-            // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
-            BiFunction<String, List<String>, Object> wrapImportFn = (name, fromlist) -> scriptExtensionModuleProvider
-                    .locatorFor(getPolyglotContext(), this.engineIdentifier, scriptExtensionAccessor)
-                    .locateModule(name, fromlist);
-            getBindings(ScriptContext.ENGINE_SCOPE).put(ScriptExtensionModuleProvider.IMPORT_PROXY_NAME, wrapImportFn);
-            try {
-                String wrapperContent = new String(
-                        Files.readAllBytes(PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH));
-                getPolyglotContext().eval(Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, wrapperContent,
-                        PythonScriptEngineConfiguration.PYTHON_WRAPPER_FILE_PATH.toString()).build());
-
-                // inject scope, Registry and logger
-                if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
-                        && (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null || pythonScriptEngineConfiguration
-                                .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
-                    String injectionContent = "import scope\nfrom openhab import Registry, logger";
-                    getPolyglotContext().eval(Source
-                            .newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>").build());
+                    // inject scope, Registry and logger
+                    if (!pythonScriptEngineConfiguration.isInjection(PythonScriptEngineConfiguration.INJECTION_DISABLED)
+                            && (ctx.getAttribute(CONTEXT_KEY_SCRIPT_FILENAME) == null || pythonScriptEngineConfiguration
+                                    .isInjection(PythonScriptEngineConfiguration.INJECTION_ENABLED_FOR_ALL_SCRIPTS))) {
+                        String injectionContent = "import scope\nfrom openhab import Registry, logger";
+                        getPolyglotContext().eval(
+                                Source.newBuilder(GraalPythonScriptEngine.LANGUAGE_ID, injectionContent, "<generated>")
+                                        .build());
+                    }
+                } catch (IOException e) {
+                    logger.error("Failed to inject import wrapper for engine '{}'", this.engineIdentifier, e);
+                    throw new IllegalArgumentException("Failed to inject import wrapper", e);
                 }
-            } catch (IOException e) {
-                logger.error("Failed to inject import wrapper for engine '{}'", this.engineIdentifier, e);
-                throw new IllegalArgumentException("Failed to inject import wrapper", e);
             }
         }
 

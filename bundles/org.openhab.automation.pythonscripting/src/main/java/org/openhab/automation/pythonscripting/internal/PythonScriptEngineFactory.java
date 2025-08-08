@@ -83,14 +83,6 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory, ScriptEng
                     defaultTimezone, providerTimezone, defaultTimezone);
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
-
-        /*
-         * try {
-         * new TypingCmd(new TypingCmd.Logger(logger)).build();
-         * } catch (Exception e) {
-         * logger.error("ERROR", e);
-         * }
-         */
     }
 
     @Deactivate

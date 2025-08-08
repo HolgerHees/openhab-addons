@@ -14,6 +14,7 @@ package org.openhab.automation.pythonscripting.internal.console.handler;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -41,6 +42,8 @@ import org.openhab.core.io.console.Console;
 @NonNullByDefault
 public class TypingCmd {
     private final Logger logger;
+
+    private static final String PATH_SEPARATOR = FileSystems.getDefault().getSeparator();
 
     public TypingCmd(Logger logger) {
         this.logger = logger;
@@ -115,25 +118,24 @@ public class TypingCmd {
                         + container.getPythonClassName() + "\n");
             }
 
-            String packageUrl = path.replace(".", "/") + "/__init__.py";
+            String packageUrl = path.replace(".", PATH_SEPARATOR) + "/__init__.py";
             dumpContentToFile(initBody.toString(), Paths.get(packageUrl));
         }
     }
 
     private void dumpClassContentToFile(String classBody, ClassContainer container, Path outputPath,
             Map<String, ClassContainer> fileContainerMap) throws IOException {
-        String content = classBody;
-        if (content == null || content.isEmpty()) {
+        if (classBody.isEmpty()) {
             return;
         }
 
-        String modulePath = container.getPythonModuleName().replace(".", "/");
+        String modulePath = container.getPythonModuleName().replace(".", PATH_SEPARATOR);
         Path path = outputPath.resolve(modulePath)
                 .resolve("__" + container.getPythonClassName().toLowerCase() + "__.py");
 
         fileContainerMap.put(path.toString(), container);
 
-        dumpContentToFile(content, path);
+        dumpContentToFile(classBody, path);
     }
 
     private void dumpContentToFile(String content, Path path) throws IOException {

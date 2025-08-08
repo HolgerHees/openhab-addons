@@ -68,6 +68,7 @@ public class PythonScriptEngineConfiguration {
 
     private static final String SYSTEM_PROPERTY_JAVA_IO_TMPDIR = "java.io.tmpdir";
 
+    private static final String PATH_SEPARATOR = FileSystems.getDefault().getSeparator();
     private static final String RESOURCE_SEPARATOR = "/";
 
     public static final Path PYTHON_DEFAULT_PATH = Paths.get(OpenHAB.getConfigFolder(), "automation", "python");
@@ -335,11 +336,10 @@ public class PythonScriptEngineConfiguration {
 
         logger.info("Checking for helper libs version '{}'", providedHelperLibVersion);
 
-        String pathSeparator = FileSystems.getDefault().getSeparator();
         String resourceLibPath = PYTHON_OPENHAB_LIB_PATH.toString().substring(PYTHON_DEFAULT_PATH.toString().length())
-                + pathSeparator;
-        if (!RESOURCE_SEPARATOR.equals(pathSeparator)) {
-            resourceLibPath = resourceLibPath.replace(pathSeparator, RESOURCE_SEPARATOR);
+                + PATH_SEPARATOR;
+        if (!RESOURCE_SEPARATOR.equals(PATH_SEPARATOR)) {
+            resourceLibPath = resourceLibPath.replace(PATH_SEPARATOR, RESOURCE_SEPARATOR);
         }
 
         if (Files.exists(PYTHON_INIT_FILE_PATH)) {
