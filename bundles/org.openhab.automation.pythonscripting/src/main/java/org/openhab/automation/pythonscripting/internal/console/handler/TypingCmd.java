@@ -158,7 +158,7 @@ public class TypingCmd {
 
         public void info(String s) {
             if (logger instanceof Console console) {
-                console.println("INFO: {}" + s);
+                console.println("INFO: " + s);
             } else {
                 ((org.slf4j.Logger) logger).info("{}", s);
             }

@@ -145,7 +145,7 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         for (Field field : container.getFields()) {
             try {
-                String type = convertToPythonType(field.getGenericType(), field.getType(), true);
+                String type = convertToPythonType(field.getGenericType());
                 String value = "";
                 Class<?> t = field.getType();
 
@@ -192,11 +192,11 @@ public class ClassConverter {
 
         // Collect generics
         for (int i = 0; i < method.getReturnTypeCount(); i++) {
-            collectGenerics(method.getGenericReturnType(i), method.getReturnType(i));
+            collectGenerics(method.getGenericReturnType(i));
         }
         for (ParameterContainer p : method.getParameters()) {
             for (int i = 0; i < p.getTypeCount(); i++) {
-                collectGenerics(p.getGenericType(i), p.getType(i));
+                collectGenerics(p.getGenericType(i));
             }
         }
 
@@ -208,7 +208,7 @@ public class ClassConverter {
         for (ParameterContainer p : method.getParameters()) {
             Set<String> parameterTypes = new HashSet<String>();
             for (int i = 0; i < p.getTypeCount(); i++) {
-                String t = convertToPythonType(p.getGenericType(i), p.getType(i), true);
+                String t = convertToPythonType(p.getGenericType(i));
                 parameterTypes.add(t);
             }
             List<String> sorted = parameterTypes.stream().sorted().collect(Collectors.toList());
@@ -228,12 +228,12 @@ public class ClassConverter {
             // Collect Return types
             Set<String> returnTypes = new HashSet<String>();
             for (int i = 0; i < method.getReturnTypeCount(); i++) {
-                String t = convertToPythonType(method.getGenericReturnType(i), method.getReturnType(i), false);
+                String t = convertToPythonType(method.getGenericReturnType(i));
                 returnTypes.add(t);
             }
             List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
 
-            builder.append("-> " + String.join(" | ", sortedReturnTypes));
+            builder.append(" -> " + String.join(" | ", sortedReturnTypes));
         }
 
         // Finalize method
@@ -253,65 +253,95 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         HashSet<String> hashSet = new HashSet<>(imports.values());
         ArrayList<String> sortedImports = new ArrayList<>(hashSet);
-        sortedImports.sort(Comparator.naturalOrder());
-
+        Collections.sort(sortedImports, new Comparator<String>() {
+            @Override
+            public int compare(String o1, String o2) {
+                if (o1.length() > o2.length()) {
+                    return 1;
+                }
+                if (o1.length() < o2.length()) {
+                    return -1;
+                }
+                return o1.compareTo(o2);
+            }
+        });
         for (String importLine : sortedImports) {
             builder.append(importLine + "\n");
         }
         return builder.toString();
     }
 
-    private String convertToPythonType(Type genericType, Type type, boolean isArgument) {
+    private String convertToPythonType(Type genericType) {
         List<String> types = new ArrayList<String>();
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
-            // System.out.println("TypeVariable " + _type);
-            String t = generics.get(_type.getTypeName());
-            if (t != null) {
-                types.add(t);
+            String type = generics.get(_type.getTypeName());
+            if (type != null) {
+                types.add(type);
             }
+            /*
+             * else if (_type.getBounds().length > 0) {
+             * types.add(convertToPythonType(_type.getBounds()[0]));
+             * }
+             */
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
-            types.add(_type.getRawType().getTypeName());
-            types.add(convertSubType(_type.getActualTypeArguments()[0]));
+            // System.out.println("ParameterizedType | " + _type + " | " + _type.getRawType().getTypeName() + " | "
+            // + _type.getActualTypeArguments()[0]);
+            types.add(convertToPythonType(_type.getRawType()));
+            types.add(convertToPythonType(_type.getActualTypeArguments()[0]));
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
-            // System.out.println("WildcardType " + _type);
+            // System.out.println("WildcardType | " + _type);
             if (_type.getUpperBounds().length > 0) {
-                types.add(convertSubType(_type.getUpperBounds()[0]));
+                types.add(convertToPythonType(_type.getUpperBounds()[0]));
             } else if (_type.getLowerBounds().length > 0) {
-                types.add(convertSubType(_type.getUpperBounds()[0]));
+                types.add(convertToPythonType(_type.getLowerBounds()[0]));
             } else {
                 types.add("java.lang.Class");
             }
         } else if (genericType instanceof GenericArrayType) {
             // TODO Not tested
             GenericArrayType _type = (GenericArrayType) genericType;
-            // System.out.println("GenericArrayType " + _type);
+            // System.out.println("GenericArrayType | " + _type);
             types.add("java.util.List");
-            types.add(convertSubType(_type.getGenericComponentType()));
+            types.add(convertToPythonType(_type.getGenericComponentType()));
         } else {
-            String javaType = type.getTypeName();
-            while (javaType.endsWith("[]")) {
+            // System.out.println("OtherType | " + genericType.getTypeName());
+            String type = genericType.getTypeName();
+            while (type.endsWith("[]")) {
                 types.add("java.util.List");
-                javaType = javaType.substring(0, javaType.length() - 2);
+                type = type.substring(0, type.length() - 2);
             }
-            types.add(javaType);
+            types.add(type);
         }
 
         if (!types.isEmpty()) {
-            if (isArgument) {
-                return convertJavaArgumentToPythonType(types);
-            }
-            return convertJavaReturnToPythonType(types.getFirst());
+            return convertJavatToPythonType(types);
         }
-        return "None";
+
+        // logger.warn("ConvertToPythonType for type '{}' is empty for class {}", genericType.getTypeName(),
+        // container.getRelatedClass().getName());
+        return "any";
     }
 
-    private String convertJavaArgumentToPythonType(List<String> types) {
-        String javaType = types.removeFirst();
+    private String convertJavatToPythonType(List<String> types) {
+        String javaType = types.remove(0);
         switch (javaType) {
+            case "char":
+                return "str";
+            case "long":
+            case "int":
+            case "short":
+                return "int";
+            case "double":
+            case "float":
+                return "float";
+            case "byte":
+                return "bytes";
+            case "boolean":
+                return "bool";
             case "java.lang.Byte":
                 return "bytes";
             case "java.lang.Double":
@@ -328,44 +358,24 @@ public class ClassConverter {
             case "java.util.List":
             case "java.util.Set":
                 if (!types.isEmpty()) {
-                    String subType = convertJavaArgumentToPythonType(types);
-                    return "list[" + subType + "]";
+                    return "list[" + convertJavatToPythonType(types) + "]";
                 }
                 return "list";
             case "java.util.Map":
             case "java.util.HashMap":
             case "java.util.Hashtable":
                 if (!types.isEmpty()) {
-                    String subType = convertJavaArgumentToPythonType(types);
-                    return "dict[" + subType + "]";
+                    return "dict[" + convertJavatToPythonType(types) + "]";
                 }
                 return "dict";
+            case "?":
             case "java.lang.Class":
+                if (!types.isEmpty()) {
+                    return convertJavatToPythonType(types);
+                }
                 return "any";
-        }
-
-        return convertJavaReturnToPythonType(javaType);
-    }
-
-    private String convertJavaReturnToPythonType(String javaType) {
-        switch (javaType) {
-            case "char":
-                return "str";
-            case "long":
-            case "int":
-            case "short":
-                return "int";
-            case "double":
-            case "float":
-                return "float";
-            case "byte":
-                return "bytes";
-            case "boolean":
-                return "bool";
             case "void":
                 return "None";
-            case "?":
-                return "any";
         }
 
         return convertBaseJavaToPythonType(javaType);
@@ -416,33 +426,43 @@ public class ClassConverter {
         return "\"" + value.toString() + "\"";
     }
 
-    private void collectGenerics(Type genericType, Type type) {
+    private void collectGenerics(Type genericType) {
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             if (!generics.containsKey(_type.getTypeName())) {
-                String javaSubType = parseSubType(_type.getBounds()[0]);
+                /*
+                 * for (Type _genericType : _type.getBounds()) {
+                 * System.out.println(_type.getTypeName() + " " + _genericType.getTypeName() + " "
+                 * + (_genericType instanceof Type));
+                 * }
+                 */
+                String javaSubType = _type.getBounds()[0].getTypeName();
+                Matcher matcher = CLASS_MATCHER.matcher(javaSubType);
+                if (matcher.find() && !javaSubType.equals(matcher.group(1))) {
+                    // System.out.println("parseSubType: " + container.getRelatedClass().getName() + " | " + javaSubType
+                    // + " | " + matcher.group(1));
+                    javaSubType = matcher.group(1);
+                }
                 generics.put(_type.getTypeName(), javaSubType);
             }
-        }
-    }
-
-    private String convertSubType(Type type) {
-        if (type instanceof TypeVariable) {
-            String t = generics.get(type.getTypeName());
-            if (t != null) {
-                return t;
+        } else if (genericType instanceof ParameterizedType) {
+            ParameterizedType _type = (ParameterizedType) genericType;
+            collectGenerics(_type.getRawType());
+            for (Type _genericType : _type.getActualTypeArguments()) {
+                collectGenerics(_genericType);
+            }
+        } else if (genericType instanceof WildcardType) {
+            WildcardType _type = (WildcardType) genericType;
+            if (_type.getUpperBounds().length > 0) {
+                for (Type _genericType : _type.getUpperBounds()) {
+                    collectGenerics(_genericType);
+                }
+            } else if (_type.getLowerBounds().length > 0) {
+                for (Type _genericType : _type.getLowerBounds()) {
+                    collectGenerics(_genericType);
+                }
             }
         }
-        return parseSubType(type);
-    }
-
-    private String parseSubType(Type type) {
-        String typeName = type.getTypeName();
-        Matcher matcher = CLASS_MATCHER.matcher(typeName);
-        if (matcher.find() && !typeName.equals(matcher.group(1))) {
-            typeName = matcher.group(1);
-        }
-        return typeName;
     }
 
     private @Nullable String buildClassDocumentationBlock() {
