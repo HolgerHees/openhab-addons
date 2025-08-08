@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2010-2025 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.automation.pythonscripting.internal.console.handler;
 
 import java.io.IOException;
@@ -12,7 +24,6 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-import org.eclipse.jdt.annotation.NonNull;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
@@ -23,33 +34,26 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+/**
+ * Update command implementations
+ *
+ * @author Holger Hees - Initial contribution
+ */
 @NonNullByDefault
-public class Update {
+public class UpdateCmd {
     private static final String UPDATE_RELEASES_URL = "https://api.github.com/repos/openhab/openhab-python/releases";
     private static final String UPDATE_LATEST_URL = "https://api.github.com/repos/openhab/openhab-python/releases/latest";
 
-    private static @Nullable JsonElement getReleaseData(String url, Console console) {
-        try {
-            HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
-                    .header("Accept", "application/vnd.github+json").GET().build();
+    private final PythonScriptEngineConfiguration config;
+    private final Console console;
 
-            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
-            if (response.statusCode() == 200) {
-                JsonElement obj = JsonParser.parseString(response.body());
-                return obj;
-            } else {
-                console.println("Fetching releases failed. Status code is " + response.statusCode());
-            }
-
-        } catch (IOException | InterruptedException e) {
-            console.println("Fetching releases failed. Request interrupted " + e.getLocalizedMessage());
-        }
-        return null;
+    public UpdateCmd(PythonScriptEngineConfiguration config, Console console) {
+        this.config = config;
+        this.console = console;
     }
 
-    public static void updateList(@NonNull PythonScriptEngineConfiguration config, @NonNull Console console) {
-        JsonElement rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
+    public void updateList() {
+        JsonElement rootElement = getReleaseData(UPDATE_RELEASES_URL);
         if (rootElement != null) {
             Version installedVersion = config.getInstalledHelperLibVersion();
             Version providedVersion = config.getProvidedHelperLibVersion();
@@ -85,12 +89,12 @@ public class Update {
         }
     }
 
-    public static void updateCheck(@NonNull PythonScriptEngineConfiguration config, @NonNull Console console) {
+    public void updateCheck() {
         Version installedVersion = config.getInstalledHelperLibVersion();
         if (installedVersion == null) {
             console.println("Helper libs disabled. Skipping update.");
         } else {
-            JsonElement rootElement = getReleaseData(UPDATE_LATEST_URL, console);
+            JsonElement rootElement = getReleaseData(UPDATE_LATEST_URL);
             if (rootElement != null) {
                 JsonElement tagName = rootElement.getAsJsonObject().get("tag_name");
                 Version latestVersion = PythonScriptEngineConfiguration.parseHelperLibVersion(tagName.getAsString());
@@ -104,12 +108,11 @@ public class Update {
         }
     }
 
-    public static void updateInstall(String requestedVersionString, @NonNull PythonScriptEngineConfiguration config,
-            @NonNull Console console) {
+    public void updateInstall(String requestedVersionString) {
         JsonObject releaseObj = null;
         Version releaseVersion = null;
         if ("latest".equals(requestedVersionString)) {
-            JsonElement rootElement = getReleaseData(UPDATE_LATEST_URL, console);
+            JsonElement rootElement = getReleaseData(UPDATE_LATEST_URL);
             if (rootElement != null) {
                 releaseObj = rootElement.getAsJsonObject();//
                 JsonElement tagName = releaseObj.get("tag_name");
@@ -119,7 +122,7 @@ public class Update {
             try {
                 Version requestedVersion = PythonScriptEngineConfiguration
                         .parseHelperLibVersion(requestedVersionString);
-                JsonElement rootElement = getReleaseData(UPDATE_RELEASES_URL, console);
+                JsonElement rootElement = getReleaseData(UPDATE_RELEASES_URL);
                 if (rootElement != null) {
                     if (rootElement.isJsonArray()) {
                         JsonArray list = rootElement.getAsJsonArray();
@@ -176,5 +179,25 @@ public class Update {
         } else {
             console.println("Version '" + requestedVersionString + "' not found. ");
         }
+    }
+
+    private @Nullable JsonElement getReleaseData(String url) {
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url))
+                    .header("Accept", "application/vnd.github+json").GET().build();
+
+            HttpResponse<String> response = client.send(request, BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonElement obj = JsonParser.parseString(response.body());
+                return obj;
+            } else {
+                console.println("Fetching releases failed. Status code is " + response.statusCode());
+            }
+
+        } catch (IOException | InterruptedException e) {
+            console.println("Fetching releases failed. Request interrupted " + e.getLocalizedMessage());
+        }
+        return null;
     }
 }

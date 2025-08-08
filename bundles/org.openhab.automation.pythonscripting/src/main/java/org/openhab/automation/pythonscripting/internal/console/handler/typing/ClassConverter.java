@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2010-2025 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.automation.pythonscripting.internal.console.handler.typing;
 
 import java.io.IOException;
@@ -10,6 +22,7 @@ import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -28,12 +41,17 @@ import org.openhab.automation.pythonscripting.internal.console.handler.typing.Cl
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Converts a Java class to a Python class stub
+ *
+ * @author Holger Hees - Initial contribution
+ */
 @NonNullByDefault
 public class ClassConverter {
     private final Logger logger = LoggerFactory.getLogger(ClassConverter.class);
 
-    private static Pattern EXTENDS_MATCHER = Pattern.compile("\\? extends ([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
-    private static Pattern CLASS_MATCHER = Pattern.compile("([a-z0-9\\.]+)", Pattern.CASE_INSENSITIVE);
+    private static Pattern CLASS_MATCHER = Pattern
+            .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
 
     private static String BASE_URL;
     static {
@@ -43,49 +61,142 @@ public class ClassConverter {
         BASE_URL = "https://www.openhab.org/javadoc/" + v + "/";
     }
 
-    public void buildClass(ClassContainer container) throws IOException, ClassNotFoundException {
-        StringBuilder classBody = new StringBuilder();
+    private final Map<String, String> generics;
+    private final Map<String, String> imports;
+    private final ClassContainer container;
 
-        Map<String, String> generics = new HashMap<String, String>();
-        Map<String, String> imports = new HashMap<String, String>();
-
-        classBody.append(buildClassHead(container, imports, generics));
-
-        List<MethodContainer> methods = container.getRelatedMethods();
-        for (MethodContainer method : methods) {
-
-            classBody.append(buildClassMethod(container, method, imports, generics));
-        }
-        if (imports.size() > 0) {
-            classBody.insert(0, "\n\n");
-            classBody.insert(0, buildClassImports(imports));
-        }
-
-        container.setClassStub(classBody.toString(), imports.keySet());
+    public ClassConverter(ClassContainer container) {
+        this.container = container;
+        this.generics = new HashMap<String, String>();
+        this.imports = new HashMap<String, String>();
     }
 
-    private Object buildClassImports(Map<String, String> imports) {
-        StringBuilder builder = new StringBuilder();
-        HashSet<String> hashSet = new HashSet<>(imports.values());
-        ArrayList<String> sortedImports = new ArrayList<>(hashSet);
-        sortedImports.sort(Comparator.reverseOrder());
+    public List<String> getImports() {
+        return new ArrayList<String>(this.imports.keySet());
+    }
 
-        for (String importLine : sortedImports) {
-            builder.append(importLine + "\n");
+    public String build() throws IOException, ClassNotFoundException {
+        // Class head
+        StringBuilder classBody = new StringBuilder();
+        classBody.append(buildClassHead());
+
+        // Class documentation
+        String doc = buildClassDocumentationBlock();
+        if (doc != null) {
+            classBody.append(doc);
+            classBody.append("\n");
         }
+
+        // Class fields
+        classBody.append(buildClassFields());
+
+        // Class methods
+        List<MethodContainer> methods = container.getMethods();
+        Collections.sort(methods, new Comparator<MethodContainer>() {
+            @Override
+            public int compare(MethodContainer o1, MethodContainer o2) {
+                return o1.getPythonMethodName().compareTo(o2.getPythonMethodName());
+            }
+        });
+        for (MethodContainer method : methods) {
+
+            classBody.append(buildClassMethod(method));
+        }
+
+        // Class imports
+        if (!imports.isEmpty()) {
+            classBody.insert(0, "\n\n");
+            classBody.insert(0, buildClassImports());
+        }
+
+        return classBody.toString();
+    }
+
+    private String buildClassHead() {
+        StringBuilder builder = new StringBuilder();
+        builder.append("class " + container.getPythonClassName());
+        List<String> parentTypes = new ArrayList<String>();
+        Class<?> parentClass = container.getRelatedClass().getSuperclass();
+        if (parentClass != null) {
+            String pythonType = convertBaseJavaToPythonType(parentClass.getName());
+            if (!"object".equals(pythonType)) {
+                parentTypes.add(pythonType);
+            }
+        }
+        Class<?>[] parentInterfaces = container.getRelatedClass().getInterfaces();
+        for (Class<?> parentInterface : parentInterfaces) {
+            String pythonType = convertBaseJavaToPythonType(parentInterface.getName());
+            parentTypes.add(pythonType);
+        }
+        if (parentTypes.isEmpty()) {
+            if (container.getRelatedClass().isInterface()) {
+                parentTypes.add("Protocol");
+                imports.put("__typing.Protocol", "from typing import Protocol");
+            }
+        }
+        if (!parentTypes.isEmpty()) {
+            builder.append("(" + String.join(", ", parentTypes) + ")");
+        }
+        builder.append(":\n");
         return builder.toString();
     }
 
-    private String buildClassMethod(ClassContainer container, MethodContainer method, Map<String, String> imports,
-            Map<String, String> generics) {
+    private String buildClassFields() {
+        StringBuilder builder = new StringBuilder();
+        for (Field field : container.getFields()) {
+            try {
+                String type = convertToPythonType(field.getGenericType(), field.getType(), true);
+                String value = "";
+                Class<?> t = field.getType();
+
+                if (Collection.class.isAssignableFrom(field.getType())) {
+                    List<String> values = new ArrayList<String>();
+                    if (field.get(null) instanceof Collection _values) {
+                        for (Object _value : _values) {
+                            values.add(convertFieldValue(_value));
+                        }
+                    }
+                    value = "[" + String.join(",", values) + "]";
+                } else if (t == short.class) {
+                    value = convertFieldValue(field.getShort(null));
+                } else if (t == int.class) {
+                    value = convertFieldValue(field.getInt(null));
+                } else if (t == long.class) {
+                    value = convertFieldValue(field.getLong(null));
+                } else if (t == float.class) {
+                    value = convertFieldValue(field.getFloat(null));
+                } else if (t == double.class) {
+                    value = convertFieldValue(field.getDouble(null));
+                } else if (t == boolean.class) {
+                    value = convertFieldValue(field.getBoolean(null));
+                } else if (t == char.class) {
+                    value = convertFieldValue(field.getChar(null));
+                } else {
+                    value = convertFieldValue(field.get(null));
+                }
+
+                builder.append("    " + field.getName() + ": " + type + " = " + value + "\n");
+            } catch (IllegalArgumentException | IllegalAccessException e) {
+                logger.warn("Cant convert static field {} of class {}", container.getRelatedClass().getName(),
+                        field.getName(), e);
+            }
+        }
+        if (!builder.isEmpty()) {
+            builder.append("\n");
+        }
+
+        return builder.toString();
+    }
+
+    private String buildClassMethod(MethodContainer method) {
 
         // Collect generics
         for (int i = 0; i < method.getReturnTypeCount(); i++) {
-            collectGenerics(method.getGenericReturnType(i), method.getReturnType(i), generics);
+            collectGenerics(method.getGenericReturnType(i), method.getReturnType(i));
         }
         for (ParameterContainer p : method.getParameters()) {
             for (int i = 0; i < p.getTypeCount(); i++) {
-                collectGenerics(p.getGenericType(i), p.getType(i), generics);
+                collectGenerics(p.getGenericType(i), p.getType(i));
             }
         }
 
@@ -97,30 +208,37 @@ public class ClassConverter {
         for (ParameterContainer p : method.getParameters()) {
             Set<String> parameterTypes = new HashSet<String>();
             for (int i = 0; i < p.getTypeCount(); i++) {
-                String t = convertToPythonType(container, p.getGenericType(i), p.getType(i), imports, generics, true);
+                String t = convertToPythonType(p.getGenericType(i), p.getType(i), true);
                 parameterTypes.add(t);
             }
-            List<String> sortedParameterTypes = parameterTypes.stream().sorted().collect(Collectors.toList());
-            arguments.add(
-                    p.getName() + ": " + String.join(" | ", sortedParameterTypes) + (p.isOptional ? " = None" : ""));
+            List<String> sorted = parameterTypes.stream().sorted().collect(Collectors.toList());
+            arguments.add(p.getName() + ": " + String.join(" | ", sorted) + (p.isOptional ? " = None" : ""));
         }
 
-        // Collect Return types
-        Set<String> returnTypes = new HashSet<String>();
-        for (int i = 0; i < method.getReturnTypeCount(); i++) {
-            String t = convertToPythonType(container, method.getGenericReturnType(i), method.getReturnType(i), imports,
-                    generics, false);
-            returnTypes.add(t);
-        }
-        List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
-
+        // Build method
         StringBuilder builder = new StringBuilder();
         if (Modifier.isStatic(method.getModifiers())) {
             builder.append("    @staticmethod\n");
         }
-        builder.append("    def " + method.getName() + "(" + String.join(", ", arguments) + ") -> "
-                + String.join(" | ", sortedReturnTypes) + ":\n");
-        String doc = buildMethodDocumentationBlock(container, method);
+        String methodName = method.isConstructor() ? "__init__" : method.getPythonMethodName();
+        builder.append("    def " + methodName + "(" + String.join(", ", arguments) + ")");
+
+        // Build return value
+        if (method.getReturnTypeCount() > 0) {
+            // Collect Return types
+            Set<String> returnTypes = new HashSet<String>();
+            for (int i = 0; i < method.getReturnTypeCount(); i++) {
+                String t = convertToPythonType(method.getGenericReturnType(i), method.getReturnType(i), false);
+                returnTypes.add(t);
+            }
+            List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
+
+            builder.append("-> " + String.join(" | ", sortedReturnTypes));
+        }
+
+        // Finalize method
+        builder.append(":\n");
+        String doc = buildMethodDocumentationBlock(method);
         if (doc != null) {
             builder.append(doc);
         } else {
@@ -131,189 +249,69 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private String buildClassHead(ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
+    private Object buildClassImports() {
         StringBuilder builder = new StringBuilder();
-        Class<?> cls = container.getRelatedClass();
+        HashSet<String> hashSet = new HashSet<>(imports.values());
+        ArrayList<String> sortedImports = new ArrayList<>(hashSet);
+        sortedImports.sort(Comparator.naturalOrder());
 
-        String packageName = cls.getName();
-        String moduleName = ClassContainer.parseModuleName(packageName);
-        container.setModuleName(moduleName);
-        String className = ClassContainer.parseClassName(packageName);
-        container.setClassName(className);
-
-        builder.append("class " + container.getClassName());
-        Class<?> parentCls = cls.getSuperclass();
-        if (parentCls != null) {
-            String pythonType = convertBaseJavaToPythonType(parentCls.getName(), container, imports, generics);
-            builder.append("(" + pythonType + ")");
+        for (String importLine : sortedImports) {
+            builder.append(importLine + "\n");
         }
-        builder.append(":\n");
-        String doc = buildClassDocumentationBlock(container);
-        if (doc != null) {
-            builder.append(doc);
-            builder.append("\n");
-        }
-
-        boolean hasFields = false;
-        for (Field field : container.getRelatedFields()) {
-            try {
-                String type = convertToPythonType(container, field.getGenericType(), field.getType(), imports, generics,
-                        true);
-                String value = "";
-                Class<?> t = field.getType();
-
-                if (Collection.class.isAssignableFrom(field.getType())) {
-                    List<String> values = new ArrayList<String>();
-                    Collection<Object> _values = (Collection<Object>) field.get(null);
-                    for (Object _value : _values) {
-                        values.add(buildValue(_value));
-                    }
-                    value = "[" + String.join(",", values) + "]";
-                } else if (t == short.class) {
-                    value = buildValue(field.getShort(null));
-                } else if (t == int.class) {
-                    value = buildValue(field.getInt(null));
-                } else if (t == long.class) {
-                    value = buildValue(field.getLong(null));
-                } else if (t == float.class) {
-                    value = buildValue(field.getFloat(null));
-                } else if (t == double.class) {
-                    value = buildValue(field.getDouble(null));
-                } else if (t == boolean.class) {
-                    value = buildValue(field.getBoolean(null));
-                } else if (t == char.class) {
-                    value = buildValue(field.getChar(null));
-                } else {
-                    value = buildValue(field.get(null).toString());
-                }
-
-                builder.append("    " + field.getName() + ": " + type + " = " + value + "\n");
-                hasFields = true;
-            } catch (IllegalArgumentException | IllegalAccessException e) {
-                logger.warn("Cant convert static field {} of class {}", container.getRelatedClass().getName(),
-                        field.getName(), e);
-            }
-        }
-        if (hasFields) {
-            builder.append("\n");
-        }
-
         return builder.toString();
     }
 
-    private String buildValue(Object value) {
-        if (value instanceof Number) {
-            return value.toString();
-        }
-        if (value instanceof Boolean) {
-            return ((Boolean) value) ? "True" : "False";
-        }
-        return "\"" + value.toString() + "\"";
-    }
-    /*
-     * if (value.class.isNestmateOf(short.class)) {
-     * return String.valueOf(field.getShort(null));
-     * } else if (t == int.class) {
-     * value = String.valueOf(field.getInt(null));
-     * } else if (t == long.class) {
-     * value = String.valueOf(field.getLong(null));
-     * } else if (t == float.class) {
-     * value = String.valueOf(field.getFloat(null));
-     * } else if (t == double.class) {
-     * value = String.valueOf(field.getDouble(null));
-     * } else if (t == boolean.class) {
-     * value = String.valueOf(field.getBoolean(null) ? "True" : "False");
-     * } else if (t == char.class) {
-     * value = "\"" + String.valueOf(field.getChar(null)) + "\"";
-     * } else {
-     * value = "\"" + field.get(null).toString() + "\"";
-     * }
-     * }
-     */
-
-    private void collectGenerics(Type genericType, Type type, Map<String, String> generics) {
-        if (genericType instanceof TypeVariable) {
-            TypeVariable<?> _type = (TypeVariable<?>) genericType;
-            if (!generics.containsKey(_type.getTypeName())) {
-                String javaSubType = parseSubType(_type.getBounds()[0]);
-                generics.put(_type.getTypeName(), javaSubType);
-            }
-        }
-    }
-
-    private String convertToPythonType(ClassContainer container, Type genericType, Type type,
-            Map<String, String> imports, Map<String, String> generics, boolean isArgument) {
-        boolean isList = false;
-        String javaType = null;
-        String subJavaType = null;
+    private String convertToPythonType(Type genericType, Type type, boolean isArgument) {
+        List<String> types = new ArrayList<String>();
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             // System.out.println("TypeVariable " + _type);
-            javaType = _type.getTypeName();
-            javaType = generics.get(javaType);
+            String t = generics.get(_type.getTypeName());
+            if (t != null) {
+                types.add(t);
+            }
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
-            javaType = _type.getRawType().getTypeName();
-            // System.out.println("ParameterizedType " + _type);
-            subJavaType = convertSubType(_type.getActualTypeArguments()[0], generics);
+            types.add(_type.getRawType().getTypeName());
+            types.add(convertSubType(_type.getActualTypeArguments()[0]));
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType " + _type);
-            javaType = "java.lang.Class";
             if (_type.getUpperBounds().length > 0) {
-                subJavaType = convertSubType(_type.getUpperBounds()[0], generics);
+                types.add(convertSubType(_type.getUpperBounds()[0]));
             } else if (_type.getLowerBounds().length > 0) {
-                subJavaType = convertSubType(_type.getUpperBounds()[0], generics);
+                types.add(convertSubType(_type.getUpperBounds()[0]));
+            } else {
+                types.add("java.lang.Class");
             }
         } else if (genericType instanceof GenericArrayType) {
             // TODO Not tested
             GenericArrayType _type = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType " + _type);
-            javaType = "java.util.List";
-            subJavaType = convertSubType(_type.getGenericComponentType(), generics);
+            types.add("java.util.List");
+            types.add(convertSubType(_type.getGenericComponentType()));
         } else {
-            javaType = type.getTypeName();
-            // System.out.println("Other " + javaType);
-            isList = javaType.endsWith("[]");
-            if (isList) {
-                subJavaType = javaType.substring(0, javaType.length() - 2);
-                javaType = "java.util.List";
+            String javaType = type.getTypeName();
+            while (javaType.endsWith("[]")) {
+                types.add("java.util.List");
+                javaType = javaType.substring(0, javaType.length() - 2);
             }
+            types.add(javaType);
         }
 
-        if (javaType != null) {
+        if (!types.isEmpty()) {
             if (isArgument) {
-                return convertJavaArgumentToPythonType(javaType, subJavaType, container, imports, generics);
+                return convertJavaArgumentToPythonType(types);
             }
-            return convertJavaReturnToPythonType(javaType, subJavaType, container, imports, generics);
+            return convertJavaReturnToPythonType(types.getFirst());
         }
         return "None";
     }
 
-    private @Nullable String convertSubType(Type type, Map<String, String> generics) {
-        if (type instanceof TypeVariable) {
-            return generics.get(type.getTypeName());
-        }
-        return parseSubType(type);
-    }
-
-    private String parseSubType(Type type) {
-        String typeName = type.getTypeName();
-        Matcher matcher = EXTENDS_MATCHER.matcher(typeName);
-        if (matcher.find()) {
-            typeName = matcher.group(1);
-        }
-        matcher = CLASS_MATCHER.matcher(typeName);
-        if (matcher.find()) {
-            typeName = matcher.group(1);
-        }
-        return typeName;
-    }
-
-    private String convertJavaArgumentToPythonType(String mainJavaType, @Nullable String subJavaType,
-            ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
-        switch (mainJavaType) {
+    private String convertJavaArgumentToPythonType(List<String> types) {
+        String javaType = types.removeFirst();
+        switch (javaType) {
             case "java.lang.Byte":
                 return "bytes";
             case "java.lang.Double":
@@ -327,31 +325,30 @@ public class ClassConverter {
                 return "int";
             case "java.lang.Number":
                 return "float | int";
-            case "java.util.Map":
-                return "dict";
             case "java.util.List":
             case "java.util.Set":
-                if (subJavaType != null) {
-                    String subPythonType = convertJavaArgumentToPythonType(subJavaType, null, container, imports,
-                            generics);
-                    return "list[" + subPythonType + "]";
+                if (!types.isEmpty()) {
+                    String subType = convertJavaArgumentToPythonType(types);
+                    return "list[" + subType + "]";
                 }
-                return "list[]";
+                return "list";
+            case "java.util.Map":
+            case "java.util.HashMap":
+            case "java.util.Hashtable":
+                if (!types.isEmpty()) {
+                    String subType = convertJavaArgumentToPythonType(types);
+                    return "dict[" + subType + "]";
+                }
+                return "dict";
             case "java.lang.Class":
-                if (subJavaType != null) {
-                    String subPythonType = convertJavaArgumentToPythonType(subJavaType, null, container, imports,
-                            generics);
-                    return subPythonType;
-                }
                 return "any";
         }
 
-        return convertJavaReturnToPythonType(mainJavaType, subJavaType, container, imports, generics);
+        return convertJavaReturnToPythonType(javaType);
     }
 
-    private String convertJavaReturnToPythonType(String mainJavaType, @Nullable String subJavaType,
-            ClassContainer container, Map<String, String> imports, Map<String, String> generics) {
-        switch (mainJavaType) {
+    private String convertJavaReturnToPythonType(String javaType) {
+        switch (javaType) {
             case "char":
                 return "str";
             case "long":
@@ -371,28 +368,27 @@ public class ClassConverter {
                 return "any";
         }
 
-        return convertBaseJavaToPythonType(mainJavaType, container, imports, generics);
+        return convertBaseJavaToPythonType(javaType);
     }
 
-    private String convertBaseJavaToPythonType(String javaType, ClassContainer container, Map<String, String> imports,
-            Map<String, String> generics) {
+    private String convertBaseJavaToPythonType(String javaType) {
         switch (javaType) {
             case "java.lang.String":
                 return "str";
             case "java.lang.Object":
                 return "object";
             case "java.time.ZonedDateTime":
-                imports.put("java.time.ZonedDateTime", "from datetime import datetime");
+                imports.put("__java.time.ZonedDateTime", "from datetime import datetime");
                 return "datetime";
             case "java.time.Instant":
-                imports.put("java.time.Instant", "from datetime import datetime");
+                imports.put("__java.time.Instant", "from datetime import datetime");
                 return "datetime";
             default:
                 if (javaType.contains(".")) {
-                    String className = ClassContainer.parseClassName(javaType);
+                    String className = ClassContainer.parsePythonClassName(javaType);
                     // Handle import
-                    if (!className.equals(container.getClassName())) {
-                        String moduleName = ClassContainer.parseModuleName(javaType);
+                    if (!className.equals(container.getPythonClassName())) {
+                        String moduleName = ClassContainer.parsePythonModuleName(javaType);
                         imports.put(javaType, "from " + moduleName + " import " + className);
                         return className;
                     }
@@ -407,7 +403,53 @@ public class ClassConverter {
         }
     }
 
-    private @Nullable String buildClassDocumentationBlock(ClassContainer container) {
+    private String convertFieldValue(@Nullable Object value) {
+        if (value == null) {
+            return "None";
+        }
+        if (value instanceof Number) {
+            return value.toString();
+        }
+        if (value instanceof Boolean) {
+            return ((Boolean) value) ? "True" : "False";
+        }
+        return "\"" + value.toString() + "\"";
+    }
+
+    private void collectGenerics(Type genericType, Type type) {
+        if (genericType instanceof TypeVariable) {
+            TypeVariable<?> _type = (TypeVariable<?>) genericType;
+            if (!generics.containsKey(_type.getTypeName())) {
+                String javaSubType = parseSubType(_type.getBounds()[0]);
+                generics.put(_type.getTypeName(), javaSubType);
+            }
+        }
+    }
+
+    private String convertSubType(Type type) {
+        if (type instanceof TypeVariable) {
+            String t = generics.get(type.getTypeName());
+            if (t != null) {
+                return t;
+            }
+        }
+        return parseSubType(type);
+    }
+
+    private String parseSubType(Type type) {
+        String typeName = type.getTypeName();
+        Matcher matcher = CLASS_MATCHER.matcher(typeName);
+        if (matcher.find() && !typeName.equals(matcher.group(1))) {
+            typeName = matcher.group(1);
+        }
+        return typeName;
+    }
+
+    private @Nullable String buildClassDocumentationBlock() {
+        if (!container.getPythonModuleName().startsWith("org.openhab.core")) {
+            return null;
+        }
+
         String classUrl = BASE_URL
                 + container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", ".");
 
@@ -420,8 +462,8 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private @Nullable String buildMethodDocumentationBlock(ClassContainer container, MethodContainer method) {
-        if (!container.getModuleName().startsWith("org.openhab.core")) {
+    private @Nullable String buildMethodDocumentationBlock(MethodContainer method) {
+        if (!container.getPythonModuleName().startsWith("org.openhab.core")) {
             return null;
         }
 
@@ -432,17 +474,13 @@ public class ClassConverter {
         builder.append("        \"\"\"\n");
         builder.append("        Java doc url:\n");
 
-        String className = container.getRelatedClass().getName();
-        String functionRepresentation = method.getRelatedMethod().toString();
-        functionRepresentation = functionRepresentation
-                .substring(functionRepresentation.indexOf(className + "." + method.getName()) + className.length() + 1);
-
-        if (functionRepresentation.contains(" throws ")) {
-            functionRepresentation = functionRepresentation.substring(0, functionRepresentation.indexOf(" throws "));
+        String functionRepresentation = method.getRawStringRepresentation();
+        Pattern pattern = Pattern.compile("([^\\.]+\\([^\\)]*\\))", Pattern.CASE_INSENSITIVE);
+        Matcher matcher1 = pattern.matcher(functionRepresentation);
+        if (matcher1.find()) {
+            functionRepresentation = matcher1.group(1);
         }
-
         functionRepresentation = functionRepresentation.replaceAll("<>\\?", "").replace("$", ".");
-
         // System.out.println(classUrl + "#" + functionRepresentation);
         builder.append("        ").append(classUrl).append("#").append(functionRepresentation);
 
@@ -450,26 +488,4 @@ public class ClassConverter {
         builder.append("        \"\"\"\n");
         return builder.toString();
     }
-
-    /*
-     * Constructor<?>[] constructors = cls.getClass().getConstructors();
-     * for (Constructor<?> constructor : constructors) {
-     * String methodName = "__init__";
-     * List<String> arguments = new ArrayList<String>();
-     * arguments.add("self");
-     *
-     * Class<?>[] pType = constructor.getParameterTypes();
-     * Type[] gpType = constructor.getGenericParameterTypes();
-     *
-     * int i = 0;
-     * for (Parameter parameter : constructor.getParameters()) {
-     * String type = mapType(importedClasses, classMap, typeClasses, gpType[i], pType[i]);
-     * arguments.add(parameter.getName() + ": " + type);
-     * i++;
-     * }
-     *
-     * classBody.append("    def " + methodName + "(" + String.join(", ", arguments) + "): ...\n");
-     * classBody.append("\n");
-     * }
-     */
 }

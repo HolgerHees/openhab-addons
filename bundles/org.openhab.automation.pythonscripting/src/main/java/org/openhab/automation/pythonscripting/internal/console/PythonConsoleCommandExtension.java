@@ -30,9 +30,9 @@ import org.eclipse.jdt.annotation.Nullable;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngine;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineConfiguration;
 import org.openhab.automation.pythonscripting.internal.PythonScriptEngineFactory;
-import org.openhab.automation.pythonscripting.internal.console.handler.Info;
-import org.openhab.automation.pythonscripting.internal.console.handler.Typing;
-import org.openhab.automation.pythonscripting.internal.console.handler.Update;
+import org.openhab.automation.pythonscripting.internal.console.handler.InfoCmd;
+import org.openhab.automation.pythonscripting.internal.console.handler.TypingCmd;
+import org.openhab.automation.pythonscripting.internal.console.handler.UpdateCmd;
 import org.openhab.core.automation.module.script.ScriptEngineContainer;
 import org.openhab.core.automation.module.script.ScriptEngineFactory;
 import org.openhab.core.automation.module.script.ScriptEngineManager;
@@ -175,7 +175,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
     }
 
     private void info(Console console) {
-        Info.show(pythonScriptEngineConfiguration, configDescriptionRegistry, console);
+        new InfoCmd(pythonScriptEngineConfiguration, console).show(configDescriptionRegistry);
     }
 
     private void startConsole(Console console, String[] args) {
@@ -203,19 +203,20 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
             console.println("Unknown update action '" + args[0] + "'");
             console.printUsage(getUpdateUsage());
         } else {
+            UpdateCmd cmd = new UpdateCmd(pythonScriptEngineConfiguration, console);
             switch (args[0]) {
                 case UPDATE_LIST:
-                    Update.updateList(pythonScriptEngineConfiguration, console);
+                    cmd.updateList();
                     break;
                 case UPDATE_CHECK:
-                    Update.updateCheck(pythonScriptEngineConfiguration, console);
+                    cmd.updateCheck();
                     break;
                 case UPDATE_INSTALL:
                     if (args.length <= 1) {
                         console.println("Missing release name");
                         console.printUsage("pythonscripting update install <\"latest\"|version>");
                     } else {
-                        Update.updateInstall(args[1], pythonScriptEngineConfiguration, console);
+                        cmd.updateInstall(args[1]);
                     }
                     break;
             }
@@ -224,7 +225,7 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
 
     private void executeTyping(Console console) {
         try {
-            Typing.build(new Typing.Logger(console));
+            new TypingCmd(new TypingCmd.Logger(console)).build();
         } catch (Exception e) {
             throw new IllegalArgumentException(e);
         }

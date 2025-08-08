@@ -23,6 +23,7 @@ import javax.script.ScriptEngine;
 import org.eclipse.jdt.annotation.NonNullByDefault;
 import org.eclipse.jdt.annotation.Nullable;
 import org.graalvm.polyglot.Language;
+import org.openhab.automation.pythonscripting.internal.console.handler.TypingCmd;
 import org.openhab.automation.pythonscripting.internal.fs.PythonDependencyTracker;
 import org.openhab.automation.pythonscripting.internal.scriptengine.graal.GraalPythonScriptEngine.ScriptEngineProvider;
 import org.openhab.core.automation.module.script.ScriptDependencyTracker;
@@ -84,13 +85,11 @@ public class PythonScriptEngineFactory implements ScriptEngineFactory, ScriptEng
             // System.setProperty("user.timezone", "Australia/Tasmania");
         }
 
-        /*
-         * try {
-         * Typing.build(new Typing.Logger(logger));
-         * } catch (Exception e) {
-         * e.printStackTrace();
-         * }
-         */
+        try {
+            new TypingCmd(new TypingCmd.Logger(logger)).build();
+        } catch (Exception e) {
+            logger.error("ERROR", e);
+        }
     }
 
     @Deactivate

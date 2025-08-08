@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2010-2025 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.automation.pythonscripting.internal.console.handler;
 
 import java.lang.module.ModuleDescriptor.Version;
@@ -17,10 +29,22 @@ import org.openhab.core.config.core.ConfigDescriptionParameter;
 import org.openhab.core.config.core.ConfigDescriptionRegistry;
 import org.openhab.core.io.console.Console;
 
+/**
+ * Info command implementation
+ *
+ * @author Holger Hees - Initial contribution
+ */
 @NonNullByDefault
-public class Info {
-    public static void show(PythonScriptEngineConfiguration config, ConfigDescriptionRegistry registry,
-            Console console) {
+public class InfoCmd {
+    private final PythonScriptEngineConfiguration config;
+    private final Console console;
+
+    public InfoCmd(PythonScriptEngineConfiguration config, Console console) {
+        this.config = config;
+        this.console = console;
+    }
+
+    public void show(ConfigDescriptionRegistry registry) {
         console.println("Python Scripting Environment:");
         console.println("======================================");
         console.println("  Runtime:");

@@ -1,5 +1,18 @@
+/*
+ * Copyright (c) 2010-2025 Contributors to the openHAB project
+ *
+ * See the NOTICE file(s) distributed with this work for additional
+ * information.
+ *
+ * This program and the accompanying materials are made available under the
+ * terms of the Eclipse Public License 2.0 which is available at
+ * http://www.eclipse.org/legal/epl-2.0
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.openhab.automation.pythonscripting.internal.console.handler.typing;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -8,25 +21,32 @@ import java.lang.reflect.Type;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.jdt.annotation.NonNullByDefault;
-import org.eclipse.jdt.annotation.Nullable;
-import org.openhab.automation.pythonscripting.internal.console.handler.Typing.Logger;
+import org.openhab.automation.pythonscripting.internal.console.handler.TypingCmd.Logger;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.FrameworkUtil;
 
+/**
+ * Collects classes
+ *
+ * @author Holger Hees - Initial contribution
+ */
 @NonNullByDefault
 public class ClassCollector {
-    public Map<String, ClassContainer> collectBundleClasses(String packageName, Logger logger) throws Exception {
+    private final Logger logger;
+
+    public ClassCollector(Logger logger) {
+        this.logger = logger;
+    }
+
+    public Map<String, ClassContainer> collectBundleClasses(String packageName) throws Exception {
         List<Class<?>> clsList = new ArrayList<Class<?>>();
         Bundle bundle = FrameworkUtil.getBundle(ClassCollector.class);
         Bundle[] bundles = bundle.getBundleContext().getBundles();
@@ -42,7 +62,7 @@ public class ClassCollector {
                     }
                     clsName = clsName.replace(".class", "").replace("/", ".");
                     try {
-                        Class cls = Class.forName(clsName);
+                        Class<?> cls = Class.forName(clsName);
                         if (!Modifier.isPublic(cls.getModifiers())) {
                             continue;
                         }
@@ -52,7 +72,7 @@ public class ClassCollector {
                     }
                 }
             }
-            if (bundleClsList.size() > 0) {
+            if (!bundleClsList.isEmpty()) {
                 logger.info("BUNDLE: " + b + " with " + bundleClsList.size() + " classes processed");
                 clsList.addAll(bundleClsList);
             }
@@ -60,34 +80,25 @@ public class ClassCollector {
         return processClasses(clsList);
     }
 
-    public Map<String, ClassContainer> collectReflectionClasses(Set<String> imports, Logger logger) throws Exception {
+    public Map<String, ClassContainer> collectReflectionClasses(Set<String> imports) throws Exception {
         List<Class<?>> clsList = new ArrayList<Class<?>>();
         for (String _import : imports) {
+            if (_import.startsWith("__")) {
+                continue;
+            }
+
             try {
                 clsList.add(Class.forName(_import));
             } catch (ClassNotFoundException e) {
                 logger.warn("Class " + _import + " not found");
             }
         }
-
-        /*
-         * Reflections reflections = new Reflections(imports, new SubTypesScanner(false));
-         * for (String c : reflections.getAllTypes()) {
-         * try {
-         * clsList.add(Class.forName(c));
-         * } catch (ClassNotFoundException e) {
-         * }
-         * }
-         */
         return processClasses(clsList);
     }
 
     private Map<String, ClassContainer> processClasses(List<Class<?>> clsList) {
         Map<String, ClassContainer> result = new HashMap<String, ClassContainer>();
         for (Class<?> cls : clsList) {
-            // if (!cls.getSimpleName().equals("BusEvent")) {
-            // continue;
-            // }
             result.put(cls.getName(), new ClassContainer(cls));
         }
         return result;
@@ -98,36 +109,36 @@ public class ClassCollector {
         private List<Field> fields;
         private Map<String, MethodContainer> methods = new HashMap<String, ClassCollector.MethodContainer>();
 
-        private String className = "";
-        private String moduleName = "";
-        private String body = "";
-        private Set<String> imports = new HashSet<String>();
+        private String pythonClassName;
+        private String pythonModuleName;
 
         public ClassContainer(Class<?> cls) {
             this.cls = cls;
+
+            String packageName = cls.getName();
+            this.pythonClassName = ClassContainer.parsePythonClassName(packageName);
+            this.pythonModuleName = ClassContainer.parsePythonModuleName(packageName);
 
             fields = Arrays.stream(cls.getDeclaredFields()).filter(
                     method -> Modifier.isPublic(method.getModifiers()) && Modifier.isStatic(method.getModifiers()))
                     .collect(Collectors.toList());
 
+            Constructor<?>[] constructors = cls.getConstructors();
+            for (Constructor<?> constructor : constructors) {
+                String uid = constructor.getName();
+                MethodContainer methodContainer;
+                if (!this.methods.containsKey(uid)) {
+                    methodContainer = new MethodContainer(constructor);
+                    this.methods.put(uid, methodContainer);
+                }
+                this.methods.get(uid).addParametersFrom(constructor);
+            }
+
             List<Method> methods = Arrays.stream(cls.getDeclaredMethods()).filter(
                     method -> Modifier.isPublic(method.getModifiers()) && !Modifier.isVolatile(method.getModifiers()))
                     .collect(Collectors.toList());
-
-            // for (Method method : methods) {
-            // System.out.println(method.getName() + " " + Modifier.toString(method.getModifiers()));
-            // }
-
-            Collections.sort(methods, new Comparator<Method>() {
-                @Override
-                public int compare(Method o1, Method o2) {
-                    return o1.getName().compareTo(o2.getName());
-                }
-            });
-
             for (Method method : methods) {
                 String uid = method.getName();
-                // + "|" + method.getParameterCount();
                 MethodContainer methodContainer;
                 if (!this.methods.containsKey(uid)) {
                     methodContainer = new MethodContainer(method);
@@ -141,71 +152,74 @@ public class ClassCollector {
             return cls;
         }
 
-        public List<Field> getRelatedFields() {
+        public List<Field> getFields() {
             return fields;
         }
 
-        public List<MethodContainer> getRelatedMethods() {
+        public List<MethodContainer> getMethods() {
             return new ArrayList<MethodContainer>(methods.values());
         }
 
-        public void setClassStub(String body, Set<String> set) {
-            this.body = body;
-            this.imports = set;
+        public String getPythonClassName() {
+            return pythonClassName;
         }
 
-        public @Nullable String getBody() {
-            return body;
+        public String getPythonModuleName() {
+            return pythonModuleName;
         }
 
-        public List<String> getImports() {
-            return new ArrayList<String>(this.imports);
-        }
-
-        public void setClassName(String className) {
-            this.className = className;
-        }
-
-        public String getClassName() {
-            return className;
-        }
-
-        public void setModuleName(String moduleName) {
-            this.moduleName = moduleName;
-        }
-
-        public String getModuleName() {
-            return moduleName;
-        }
-
-        public static String parseModuleName(String name) {
-            return name.substring(0, name.lastIndexOf("."));
-        }
-
-        public static String parseClassName(String name) {
+        public static String parsePythonClassName(String name) {
             String className = name.substring(name.lastIndexOf(".") + 1);
             if (className.contains("$")) {
                 className = className.replace("$", "_");
             }
             return className;
         }
+
+        public static String parsePythonModuleName(String name) {
+            return name.substring(0, name.lastIndexOf("."));
+        }
     }
 
     public static class MethodContainer {
-        Method method;
+        int modifier;
+        String methodName;
+        String rawStringRepresentation;
+        boolean isConstructor = false;
+
         List<Type> returnTypes = new ArrayList<Type>();
         List<Class<?>> returnClasses = new ArrayList<Class<?>>();
         List<ParameterContainer> args = new ArrayList<ParameterContainer>();
 
-        public MethodContainer(Method method) {
-            this.method = method;
+        public MethodContainer(Constructor<?> constructor) {
+            this.modifier = constructor.getModifiers();
+            this.methodName = ClassContainer.parsePythonClassName(constructor.getName());
+            this.rawStringRepresentation = constructor.toString();
+            this.isConstructor = true;
+        }
 
+        public MethodContainer(Method method) {
+            this.modifier = method.getModifiers();
+            this.methodName = method.getName();
+            this.rawStringRepresentation = method.toString();
             this.returnTypes.add(method.getGenericReturnType());
             this.returnClasses.add(method.getReturnType());
         }
 
-        public Method getRelatedMethod() {
-            return method;
+        public void addParametersFrom(Constructor<?> constructor) {
+            Type[] gpType = constructor.getGenericParameterTypes();
+            Class<?>[] pType = constructor.getParameterTypes();
+            for (int i = 0; i < constructor.getParameterCount(); i++) {
+                if (args.size() <= i) {
+                    args.add(new ParameterContainer(constructor.getParameters()[i], gpType[i], pType[i]));
+                } else {
+                    args.get(i).addParameter(constructor.getParameters()[i], gpType[i], pType[i]);
+                }
+            }
+
+            for (int i = constructor.getParameterCount(); i < args.size(); i++) {
+                args.get(i).markAsOptional();
+            }
         }
 
         public void addParametersFrom(Method method) {
@@ -227,12 +241,20 @@ public class ClassCollector {
             }
         }
 
-        public String getName() {
-            return method.getName();
+        public String getPythonMethodName() {
+            return methodName;
+        }
+
+        public boolean isConstructor() {
+            return this.isConstructor;
         }
 
         public int getModifiers() {
-            return method.getModifiers();
+            return modifier;
+        }
+
+        public String getRawStringRepresentation() {
+            return rawStringRepresentation;
         }
 
         public int getReturnTypeCount() {
@@ -266,13 +288,13 @@ public class ClassCollector {
         List<Type> types = new ArrayList<Type>();
         List<Class<?>> clss = new ArrayList<Class<?>>();
 
-        public ParameterContainer(Parameter arg, Type type, Class cls) {
+        public ParameterContainer(Parameter arg, Type type, Class<?> cls) {
             this.parameter = arg;
             this.types.add(type);
             this.clss.add(cls);
         }
 
-        public void addParameter(Parameter arg, Type type, Class cls) {
+        public void addParameter(Parameter arg, Type type, Class<?> cls) {
             types.add(type);
             clss.add(cls);
         }
