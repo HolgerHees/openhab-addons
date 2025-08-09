@@ -384,8 +384,13 @@ public class ClassConverter {
                 if (Number.class.equals(cls)) {
                     return "float | int";
                 }
-                if (Collection.class.equals(cls) || Iterable.class.equals(cls) || List.class.equals(cls)
-                        || Set.class.equals(cls)) {
+                if (Iterable.class.equals(cls)) {
+                    if (javaType.hasSubTypes(1)) {
+                        return "iter[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
+                    return "iter";
+                }
+                if (Collection.class.equals(cls) || List.class.equals(cls) || Set.class.equals(cls)) {
                     if (javaType.hasSubTypes(1)) {
                         return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
                     }
