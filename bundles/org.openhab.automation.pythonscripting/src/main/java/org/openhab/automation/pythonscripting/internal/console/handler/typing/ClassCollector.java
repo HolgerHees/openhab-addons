@@ -208,40 +208,27 @@ public class ClassCollector {
         }
 
         public void addParametersFrom(Constructor<?> constructor) {
-            Type[] gpType = constructor.getGenericParameterTypes();
-            Class<?>[] pType = constructor.getParameterTypes();
-            for (int i = 0; i < constructor.getParameterCount(); i++) {
-                if (args.size() <= i) {
-                    args.add(new ParameterContainer(constructor.getParameters()[i], gpType[i], pType[i]));
-                } else {
-                    args.get(i).addParameter(constructor.getParameters()[i], gpType[i], pType[i]);
-                }
-            }
-
-            if (constructor.getParameterCount() < mandatoryParameterCount) {
-                mandatoryParameterCount = constructor.getParameterCount();
-            }
-            for (int i = mandatoryParameterCount; i < args.size(); i++) {
-                args.get(i).markAsOptional();
-            }
+            init(constructor.getParameters(), constructor.getGenericParameterTypes());
         }
 
         public void addParametersFrom(Method method) {
             returnTypes.add(method.getGenericReturnType());
             returnClasses.add(method.getReturnType());
 
-            Type[] gpType = method.getGenericParameterTypes();
-            Class<?>[] pType = method.getParameterTypes();
-            for (int i = 0; i < method.getParameterCount(); i++) {
+            init(method.getParameters(), method.getGenericParameterTypes());
+        }
+
+        private void init(Parameter[] parameters, Type[] gpType) {
+            for (int i = 0; i < parameters.length; i++) {
                 if (args.size() <= i) {
-                    args.add(new ParameterContainer(method.getParameters()[i], gpType[i], pType[i]));
+                    args.add(new ParameterContainer(parameters[i], gpType[i]));
                 } else {
-                    args.get(i).addParameter(method.getParameters()[i], gpType[i], pType[i]);
+                    args.get(i).addParameter(gpType[i]);
                 }
             }
 
-            if (method.getParameterCount() < mandatoryParameterCount) {
-                mandatoryParameterCount = method.getParameterCount();
+            if (parameters.length < mandatoryParameterCount) {
+                mandatoryParameterCount = parameters.length;
             }
             for (int i = mandatoryParameterCount; i < args.size(); i++) {
                 args.get(i).markAsOptional();
@@ -293,17 +280,14 @@ public class ClassCollector {
         Parameter parameter;
         boolean isOptional = false;
         List<Type> types = new ArrayList<Type>();
-        List<Class<?>> clss = new ArrayList<Class<?>>();
 
-        public ParameterContainer(Parameter arg, Type type, Class<?> cls) {
+        public ParameterContainer(Parameter arg, Type type) {
             this.parameter = arg;
             this.types.add(type);
-            this.clss.add(cls);
         }
 
-        public void addParameter(Parameter arg, Type type, Class<?> cls) {
+        public void addParameter(Type type) {
             types.add(type);
-            clss.add(cls);
         }
 
         public String getName() {
@@ -316,10 +300,6 @@ public class ClassCollector {
 
         public Type getGenericType(int index) {
             return types.get(index);
-        }
-
-        public Class<?> getType(int index) {
-            return clss.get(index);
         }
 
         public void markAsOptional() {
