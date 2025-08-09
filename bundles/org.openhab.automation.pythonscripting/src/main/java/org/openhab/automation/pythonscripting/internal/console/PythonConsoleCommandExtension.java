@@ -225,6 +225,10 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
 
     private void executeTyping(Console console) {
         try {
+            if (!confirmAction(console, "You are about creating python type hint stub files in '"
+                    + PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH + "'.")) {
+                return;
+            }
             new TypingCmd(new TypingCmd.Logger(console)).build();
         } catch (Exception e) {
             throw new IllegalArgumentException(e);
@@ -241,18 +245,11 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         } else {
             ArrayList<String> params = new ArrayList<String>(Arrays.asList(args));
 
-            if (PIP_UNINSTALL.equals(args[0])) {
-                try {
-                    console.readLine("\nPress Enter to confirm uninstall or Ctrl+C to cancel.", null);
-                    console.println("");
-                    params.add(1, "-y");
-                } catch (IOException e) {
-                    console.println("Error: " + e.getMessage());
-                    return;
-                } catch (RuntimeException e) {
-                    console.println("Operation cancelled.");
+            if (PIP_UNINSTALL.equals(args[0]) && args.length >= 2) {
+                if (!confirmAction(console, "You are uninstalling python modules.")) {
                     return;
                 }
+                params.add(1, "-y");
             }
 
             final String pipCode = """
@@ -331,7 +328,21 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         }
     }
 
-    public InputStream createInputStream(Console console) {
+    private boolean confirmAction(Console console, String msg) {
+        try {
+            console.readLine("\n" + msg + "\n\nPress Enter to confirm or Ctrl+C to cancel.", null);
+            console.println("");
+            return true;
+        } catch (IOException e) {
+            console.println("Error: " + e.getMessage());
+            return false;
+        } catch (RuntimeException e) {
+            console.println("Operation cancelled.");
+            return false;
+        }
+    }
+
+    private InputStream createInputStream(Console console) {
         return new InputStream() {
             byte @Nullable [] buffer = null;
             int pos = 0;

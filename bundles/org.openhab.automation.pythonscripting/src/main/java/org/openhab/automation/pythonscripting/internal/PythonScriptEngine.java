@@ -270,7 +270,9 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             Consumer<String> scriptDependencyListener = (Consumer<String>) ctx
                     .getAttribute(CONTEXT_KEY_DEPENDENCY_LISTENER);
             if (scriptDependencyListener == null) {
-                logger.info("No dependency listener found. Script dependency tracking disabled for engine '{}'.",
+                // Can happen for script engines, created directly via PythonScriptEngineFactory and not via
+                // ScriptEngineManager
+                logger.debug("No dependency listener found. Script dependency tracking disabled for engine '{}'.",
                         this.engineIdentifier);
             } else {
                 this.delegatingFileSystem.setAccessConsumer(new Consumer<Path>() {
@@ -303,7 +305,9 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             ScriptExtensionAccessor scriptExtensionAccessor = (ScriptExtensionAccessor) ctx
                     .getAttribute(CONTEXT_KEY_EXTENSION_ACCESSOR);
             if (scriptExtensionAccessor == null) {
-                logger.info("No Script accessor found. Scope injection disabled for engine {}", this.engineIdentifier);
+                // Can happen for script engines, created directly via PythonScriptEngineFactory and not via
+                // ScriptEngineManager
+                logger.debug("No Script accessor found. Scope injection disabled for engine {}", this.engineIdentifier);
             } else {
                 // Wrap the "import" function to also allow loading modules from the ScriptExtensionModuleProvider
                 BiFunction<String, List<String>, Object> wrapImportFn = (name,

@@ -123,14 +123,14 @@ public class ClassConverter {
         List<String> parentTypes = new ArrayList<String>();
         Class<?> parentClass = container.getRelatedClass().getSuperclass();
         if (parentClass != null) {
-            String pythonType = convertBaseJavaToPythonType(parentClass.getName(), classGenerics);
+            String pythonType = convertBaseJavaToPythonType(new JavaType(parentClass.getName()), classGenerics);
             if (!"object".equals(pythonType)) {
                 parentTypes.add(pythonType);
             }
         }
         Class<?>[] parentInterfaces = container.getRelatedClass().getInterfaces();
         for (Class<?> parentInterface : parentInterfaces) {
-            String pythonType = convertBaseJavaToPythonType(parentInterface.getName(), classGenerics);
+            String pythonType = convertBaseJavaToPythonType(new JavaType(parentInterface.getName()), classGenerics);
             parentTypes.add(pythonType);
         }
         if (parentTypes.isEmpty()) {
@@ -150,8 +150,8 @@ public class ClassConverter {
         StringBuilder builder = new StringBuilder();
         for (Field field : container.getFields()) {
             try {
-                List<String> javaTypes = collectJavaTypes(field.getGenericType(), classGenerics);
-                String type = convertJavatToPythonType(javaTypes, classGenerics);
+                JavaType javaType = collectJavaTypes(field.getGenericType(), classGenerics);
+                String type = convertJavatToPythonType(javaType, classGenerics);
                 String value = "";
                 Class<?> t = field.getType();
 
@@ -215,8 +215,8 @@ public class ClassConverter {
         for (ParameterContainer p : method.getParameters()) {
             Set<String> parameterTypes = new HashSet<String>();
             for (int i = 0; i < p.getTypeCount(); i++) {
-                List<String> javaTypes = collectJavaTypes(p.getGenericType(i), localGenerics);
-                String t = convertJavatToPythonType(javaTypes, localGenerics);
+                JavaType javaType = collectJavaTypes(p.getGenericType(i), localGenerics);
+                String t = convertJavatToPythonType(javaType, localGenerics);
                 parameterTypes.add(t);
             }
             List<String> sorted = parameterTypes.stream().sorted().collect(Collectors.toList());
@@ -236,8 +236,8 @@ public class ClassConverter {
             // Collect Return types
             Set<String> returnTypes = new HashSet<String>();
             for (int i = 0; i < method.getReturnTypeCount(); i++) {
-                List<String> javaTypes = collectJavaTypes(method.getGenericReturnType(i), localGenerics);
-                String t = convertJavatToPythonType(javaTypes, localGenerics);
+                JavaType javaType = collectJavaTypes(method.getGenericReturnType(i), localGenerics);
+                String t = convertJavatToPythonType(javaType, localGenerics);
                 returnTypes.add(t);
             }
             List<String> sortedReturnTypes = returnTypes.stream().sorted().collect(Collectors.toList());
@@ -280,70 +280,64 @@ public class ClassConverter {
         return builder.toString();
     }
 
-    private List<String> collectJavaTypes(Type genericType, Map<String, String> generics) {
-        List<String> types = new ArrayList<String>();
+    private JavaType collectJavaTypes(Type genericType, Map<String, String> generics) {
+        JavaType javaType = null;
         if (genericType instanceof TypeVariable) {
             TypeVariable<?> _type = (TypeVariable<?>) genericType;
             String type = generics.get(_type.getTypeName());
             if (type != null) {
-                types.add(type);
+                javaType = new JavaType(type);
+            } else {
+                javaType = new JavaType("None");
             }
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
             // System.out.println("ParameterizedType | " + _type + " | " + _type.getRawType().getTypeName() + " | "
             // + _type.getActualTypeArguments()[0]);
-            types.addAll(collectJavaTypes(_type.getRawType(), generics));
-            if (_type.getActualTypeArguments().length > 0) {
-                types.addAll(collectJavaTypes(_type.getActualTypeArguments()[0], generics));
+            javaType = collectJavaTypes(_type.getRawType(), generics);
+            for (Type __type : _type.getActualTypeArguments()) {
+                javaType.addSubType(collectJavaTypes(__type, generics));
             }
         } else if (genericType instanceof WildcardType) {
             // TODO Not tested
             WildcardType _type = (WildcardType) genericType;
             // System.out.println("WildcardType | " + _type);
             if (_type.getUpperBounds().length > 0) {
-                types.addAll(collectJavaTypes(_type.getUpperBounds()[0], generics));
+                javaType = collectJavaTypes(_type.getUpperBounds()[0], generics);
             } else if (_type.getLowerBounds().length > 0) {
-                types.addAll(collectJavaTypes(_type.getLowerBounds()[0], generics));
+                javaType = collectJavaTypes(_type.getLowerBounds()[0], generics);
             } else {
-                types.add("java.lang.Class");
+                javaType = new JavaType("java.lang.Object");
             }
         } else if (genericType instanceof GenericArrayType) {
             // TODO Not tested
             GenericArrayType _type = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType | " + _type);
-            types.add("java.util.List");
-            types.addAll(collectJavaTypes(_type.getGenericComponentType(), generics));
+            javaType = new JavaType("java.util.List");
+            javaType.addSubType(collectJavaTypes(_type.getGenericComponentType(), generics));
         } else {
             // System.out.println("OtherType | " + genericType.getTypeName());
             String type = genericType.getTypeName();
             while (type.endsWith("[]")) {
-                types.add("java.util.List");
+                JavaType _javaType = new JavaType("java.util.List");
+                if (javaType != null) {
+                    javaType.addSubType(_javaType);
+                }
+                javaType = _javaType;
                 type = type.substring(0, type.length() - 2);
             }
-            types.add(type);
+            JavaType _javaType = new JavaType(type);
+            if (javaType != null) {
+                javaType.addSubType(_javaType);
+            }
+            javaType = _javaType;
         }
 
-        /*
-         * if (container.getRelatedClass().getSimpleName().equals("DateTimeItem")) {
-         * System.out.println("---- " + genericType.getTypeName());
-         * for (String _type : types) {
-         * System.out.println(_type);
-         * }
-         * }
-         */
-
-        return types;
+        return javaType;
     }
 
-    private String convertJavatToPythonType(List<String> types, Map<String, String> generics) {
-        if (types.isEmpty()) {
-            logger.warn("ConvertToPythonType for type '{}' is empty for class {}", types,
-                    container.getRelatedClass().getName());
-            return "any";
-        }
-
-        String javaType = types.remove(0);
-        switch (javaType) {
+    private String convertJavatToPythonType(JavaType javaType, Map<String, String> generics) {
+        switch (javaType.getType()) {
             case "char":
                 return "str";
             case "long":
@@ -372,25 +366,27 @@ public class ClassConverter {
                 return "float | int";
             case "java.util.List":
             case "java.util.Set":
-                if (!types.isEmpty()) {
-                    return "list[" + convertJavatToPythonType(types, generics) + "]";
+                if (javaType.hasSubTypes(1)) {
+                    return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
                 }
                 return "list";
+            case "java.util.Dictionary":
             case "java.util.Map":
             case "java.util.HashMap":
             case "java.util.Hashtable":
-                if (!types.isEmpty()) {
-                    return "dict[" + convertJavatToPythonType(types, generics) + "]";
+                if (javaType.hasSubTypes(2)) {
+                    return "dict[" + convertJavatToPythonType(javaType.getSubType(0), generics) + ","
+                            + convertJavatToPythonType(javaType.getSubType(1), generics) + "]";
                 }
                 return "dict";
             case "java.lang.Class":
-                if (!types.isEmpty()) {
-                    return "type[" + convertJavatToPythonType(types, generics) + "]";
+                if (javaType.hasSubTypes(1)) {
+                    return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
                 }
                 return "type";
             case "?":
-                if (!types.isEmpty()) {
-                    return convertJavatToPythonType(types, generics);
+                if (javaType.hasSubTypes(1)) {
+                    return convertJavatToPythonType(javaType.getSubType(0), generics);
                 }
                 return "any";
             case "void":
@@ -400,8 +396,8 @@ public class ClassConverter {
         return convertBaseJavaToPythonType(javaType, generics);
     }
 
-    private String convertBaseJavaToPythonType(String javaType, Map<String, String> generics) {
-        switch (javaType) {
+    private String convertBaseJavaToPythonType(JavaType javaType, Map<String, String> generics) {
+        switch (javaType.getType()) {
             case "java.lang.String":
                 return "str";
             case "java.lang.Object":
@@ -413,23 +409,23 @@ public class ClassConverter {
                 imports.put("__java.time.Instant", "from datetime import datetime");
                 return "datetime";
             default:
-                javaType = cleanClassName(javaType);
-                if (javaType.contains(".")) {
-                    String className = ClassContainer.parsePythonClassName(javaType);
+                String typeName = cleanClassName(javaType.getType());
+                if (typeName.contains(".")) {
+                    String className = ClassContainer.parsePythonClassName(typeName);
                     // Handle import
                     if (!className.equals(container.getPythonClassName())) {
-                        String moduleName = ClassContainer.parsePythonModuleName(javaType);
-                        imports.put(javaType, "from " + moduleName + " import " + className);
+                        String moduleName = ClassContainer.parsePythonModuleName(typeName);
+                        imports.put(typeName, "from " + moduleName + " import " + className);
                         return className;
                     }
                     return "\"" + className + "\"";
-                } else if (javaType.length() == 1) {
-                    String _javaType = generics.get(javaType);
-                    if (_javaType != null) {
-                        return _javaType;
+                } else if (typeName.length() == 1) {
+                    String _typeName = generics.get(typeName);
+                    if (_typeName != null) {
+                        return _typeName;
                     }
                 }
-                return javaType;
+                return typeName;
         }
     }
 
@@ -529,5 +525,30 @@ public class ClassConverter {
         builder.append("\n");
         builder.append("        \"\"\"\n");
         return builder.toString();
+    }
+
+    public static class JavaType {
+        private final String type;
+        private final List<JavaType> subTypes = new ArrayList<JavaType>();
+
+        public JavaType(String type) {
+            this.type = type;
+        }
+
+        public void addSubType(JavaType subType) {
+            this.subTypes.add(subType);
+        }
+
+        public String getType() {
+            return this.type;
+        }
+
+        public boolean hasSubTypes(int neededSize) {
+            return this.subTypes.size() >= neededSize;
+        }
+
+        public JavaType getSubType(int index) {
+            return this.subTypes.get(index);
+        }
     }
 }
