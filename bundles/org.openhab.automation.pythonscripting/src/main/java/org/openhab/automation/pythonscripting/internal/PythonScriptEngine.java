@@ -466,10 +466,10 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
              * is called from
              * => org.openhab.core.automation.module.script.internal.ScriptEngineManagerImpl:removeEngine
              *
-             * must be skipped
-             * - we already run the lifecycle tracker on close()
-             * - ScriptTransformationService:disposeScriptEngine is calling close several times before. Specially if the
-             * same script is used for more then 1 transformations
+             * must be skipped, because ScriptTransformationService:disposeScriptEngine is calling engine.close several
+             * times before. Specially if the
+             * same script is used for more then 1 transformations. If the engine is already closed, the script
+             * "scriptUnloaded" will fail.
              */
             return null;
         } else {
