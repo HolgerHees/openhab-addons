@@ -183,13 +183,13 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
     @Override
     public CompiledScript compile(String script) throws ScriptException {
         Source source = createSource(script, getContext());
-        return compile(this, source);
+        return compile(source);
     }
 
-    private static CompiledScript compile(GraalPythonScriptEngine thiz, Source source) throws ScriptException {
+    private CompiledScript compile(Source source) throws ScriptException {
         try {
             // Syntax check
-            thiz.getPolyglotContext().parse(source);
+            getPolyglotContext().parse(source);
         } catch (PolyglotException pex) {
             throw toScriptException(pex);
         }
@@ -197,12 +197,12 @@ public abstract class GraalPythonScriptEngine extends AbstractScriptEngine
         return new CompiledScript() {
             @Override
             public ScriptEngine getEngine() {
-                return thiz;
+                return GraalPythonScriptEngine.this;
             }
 
             @Override
             public Object eval(ScriptContext ctx) throws ScriptException {
-                return thiz.eval(source);
+                return GraalPythonScriptEngine.this.eval(source);
             }
         };
     }
