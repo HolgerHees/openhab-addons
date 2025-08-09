@@ -57,6 +57,9 @@ public class ClassConverter {
     private static Pattern CLASS_MATCHER = Pattern
             .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$_]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
 
+    private static Pattern INSTANCE_MATCHER = Pattern.compile("^[a-z0-9\\.\\$_]+(@[a-z0-9]+)(?: .+)?$",
+            Pattern.CASE_INSENSITIVE);
+
     private static String BASE_URL;
     static {
         // Version version = FrameworkUtil.getBundle(OpenHAB.class).getVersion();
@@ -453,7 +456,15 @@ public class ClassConverter {
         if (value instanceof Boolean) {
             return ((Boolean) value) ? "True" : "False";
         }
-        return "\"" + value.toString() + "\"";
+        if (value instanceof String) {
+            return "\"" + value.toString() + "\"";
+        }
+        String valueAsString = value.toString();
+        Matcher matcher = INSTANCE_MATCHER.matcher(valueAsString);
+        if (matcher.find()) {
+            valueAsString = "<" + valueAsString.replace(matcher.group(1), "") + ">";
+        }
+        return "\"" + valueAsString + "\"";
     }
 
     private Map<String, String> collectGenerics(Type genericType) {
