@@ -288,7 +288,7 @@ public class ClassConverter {
             if (type != null) {
                 javaType = new JavaType(type);
             } else {
-                javaType = new JavaType("None");
+                javaType = new JavaType("?");
             }
         } else if (genericType instanceof ParameterizedType) {
             ParameterizedType _type = (ParameterizedType) genericType;
@@ -318,19 +318,23 @@ public class ClassConverter {
         } else {
             // System.out.println("OtherType | " + genericType.getTypeName());
             String type = genericType.getTypeName();
+            JavaType _javaType = null;
             while (type.endsWith("[]")) {
-                JavaType _javaType = new JavaType("java.util.List");
-                if (javaType != null) {
-                    javaType.addSubType(_javaType);
+                JavaType __javaType = new JavaType("java.util.List");
+                if (_javaType == null) {
+                    javaType = _javaType = __javaType;
+                } else {
+                    _javaType.addSubType(__javaType);
                 }
-                javaType = _javaType;
+                _javaType = __javaType;
                 type = type.substring(0, type.length() - 2);
             }
-            JavaType _javaType = new JavaType(type);
-            if (javaType != null) {
-                javaType.addSubType(_javaType);
+            JavaType __javaType = new JavaType(type);
+            if (javaType == null) {
+                javaType = __javaType;
+            } else {
+                _javaType.addSubType(__javaType);
             }
-            javaType = _javaType;
         }
 
         return javaType;
@@ -364,10 +368,14 @@ public class ClassConverter {
                 return "int";
             case "java.lang.Number":
                 return "float | int";
+            case "java.lang.Iterable":
             case "java.util.List":
             case "java.util.Set":
                 if (javaType.hasSubTypes(1)) {
-                    return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    String type = convertJavatToPythonType(javaType.getSubType(0), generics);
+                    if (!type.equals("any")) {
+                        return "list[" + type + "]";
+                    }
                 }
                 return "list";
             case "java.util.Dictionary":
@@ -381,7 +389,10 @@ public class ClassConverter {
                 return "dict";
             case "java.lang.Class":
                 if (javaType.hasSubTypes(1)) {
-                    return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    String type = convertJavatToPythonType(javaType.getSubType(0), generics);
+                    if (!type.equals("any")) {
+                        return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
                 }
                 return "type";
             case "?":
