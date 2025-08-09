@@ -287,9 +287,9 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
      */
     private @Nullable Object executePython(Console console, EngineEvalFunction process, boolean withFullContext) {
         String scriptIdentifier = "python-console-" + UUID.randomUUID().toString();
+        ScriptEngine engine = null;
 
         try {
-            ScriptEngine engine = null;
             printLoadingMessage(console, true);
 
             if (withFullContext) {
@@ -324,6 +324,14 @@ public class PythonConsoleCommandExtension extends AbstractConsoleCommandExtensi
         } finally {
             if (withFullContext) {
                 scriptEngineManager.removeEngine(scriptIdentifier);
+            } else {
+                if (engine instanceof AutoCloseable closeable) {
+                    try {
+                        closeable.close();
+                    } catch (Exception e) {
+                        console.println("Error while closing script engine. " + e.getMessage());
+                    }
+                }
             }
         }
     }
