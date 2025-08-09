@@ -373,38 +373,31 @@ public class ClassConverter {
             if (!cls.equals(java.lang.Object.class)) {
                 if (Byte.class.equals(cls)) {
                     return "bytes";
-                }
-                if (Double.class.equals(cls) || Float.class.equals(cls)) {
+                } else if (Double.class.equals(cls) || Float.class.equals(cls)) {
                     return "float";
-                }
-                if (BigDecimal.class.equals(cls) || BigInteger.class.equals(cls) || Long.class.equals(cls)
+                } else if (BigDecimal.class.equals(cls) || BigInteger.class.equals(cls) || Long.class.equals(cls)
                         || Integer.class.equals(cls) || Short.class.equals(cls)) {
                     return "int";
-                }
-                if (Number.class.equals(cls)) {
+                } else if (Number.class.equals(cls)) {
                     return "float | int";
-                }
-                if (Iterable.class.equals(cls)) {
-                    if (javaType.hasSubTypes(1)) {
-                        return "iter[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
-                    }
-                    return "iter";
-                }
-                if (Collection.class.equals(cls) || List.class.equals(cls) || Set.class.equals(cls)) {
-                    if (javaType.hasSubTypes(1)) {
-                        return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
-                    }
-                    return "list";
-                }
-                if (Dictionary.class.equals(cls) || Hashtable.class.equals(cls) || Map.class.equals(cls)
+                } else if (Dictionary.class.equals(cls) || Hashtable.class.equals(cls) || Map.class.equals(cls)
                         || HashMap.class.equals(cls)) {
                     if (javaType.hasSubTypes(2)) {
                         return "dict[" + convertJavatToPythonType(javaType.getSubType(0), generics) + ","
                                 + convertJavatToPythonType(javaType.getSubType(1), generics) + "]";
                     }
                     return "dict";
-                }
-                if (cls.equals(Class.class)) {
+                } else if (Collection.class.equals(cls) || List.class.equals(cls) || Set.class.equals(cls)) {
+                    if (javaType.hasSubTypes(1)) {
+                        return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
+                    return "list";
+                } else if (Iterable.class.equals(cls)) {
+                    if (javaType.hasSubTypes(1)) {
+                        return "iter[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
+                    return "iter";
+                } else if (cls.equals(Class.class)) {
                     if (javaType.hasSubTypes(1)) {
                         return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
                     }

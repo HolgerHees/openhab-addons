@@ -186,6 +186,7 @@ public class ClassCollector {
         String methodName;
         String rawStringRepresentation;
         boolean isConstructor = false;
+        int mandatoryParameterCount = 999;
 
         List<Type> returnTypes = new ArrayList<Type>();
         List<Class<?>> returnClasses = new ArrayList<Class<?>>();
@@ -217,7 +218,10 @@ public class ClassCollector {
                 }
             }
 
-            for (int i = constructor.getParameterCount(); i < args.size(); i++) {
+            if (constructor.getParameterCount() < mandatoryParameterCount) {
+                mandatoryParameterCount = constructor.getParameterCount();
+            }
+            for (int i = mandatoryParameterCount; i < args.size(); i++) {
                 args.get(i).markAsOptional();
             }
         }
@@ -236,7 +240,10 @@ public class ClassCollector {
                 }
             }
 
-            for (int i = method.getParameterCount(); i < args.size(); i++) {
+            if (method.getParameterCount() < mandatoryParameterCount) {
+                mandatoryParameterCount = method.getParameterCount();
+            }
+            for (int i = mandatoryParameterCount; i < args.size(); i++) {
                 args.get(i).markAsOptional();
             }
         }
