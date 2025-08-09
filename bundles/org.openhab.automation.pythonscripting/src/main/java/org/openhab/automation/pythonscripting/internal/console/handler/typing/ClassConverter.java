@@ -20,12 +20,16 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.lang.reflect.TypeVariable;
 import java.lang.reflect.WildcardType;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Dictionary;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Hashtable;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -355,53 +359,54 @@ public class ClassConverter {
                 return "bytes";
             case "boolean":
                 return "bool";
-            case "java.lang.Byte":
-                return "bytes";
-            case "java.lang.Double":
-            case "java.lang.Float":
-                return "float";
-            case "java.lang.BigDecimal":
-            case "java.lang.BigInteger":
-            case "java.lang.Long":
-            case "java.lang.Integer":
-            case "java.lang.Short":
-                return "int";
-            case "java.lang.Number":
-                return "float | int";
-            case "java.lang.Iterable":
-            case "java.util.List":
-            case "java.util.Set":
-                if (javaType.hasSubTypes(1)) {
-                    String type = convertJavatToPythonType(javaType.getSubType(0), generics);
-                    if (!type.equals("any")) {
-                        return "list[" + type + "]";
-                    }
-                }
-                return "list";
-            case "java.util.Dictionary":
-            case "java.util.Map":
-            case "java.util.HashMap":
-            case "java.util.Hashtable":
-                if (javaType.hasSubTypes(2)) {
-                    return "dict[" + convertJavatToPythonType(javaType.getSubType(0), generics) + ","
-                            + convertJavatToPythonType(javaType.getSubType(1), generics) + "]";
-                }
-                return "dict";
-            case "java.lang.Class":
-                if (javaType.hasSubTypes(1)) {
-                    String type = convertJavatToPythonType(javaType.getSubType(0), generics);
-                    if (!type.equals("any")) {
-                        return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
-                    }
-                }
-                return "type";
+            case "void":
+                return "None";
             case "?":
                 if (javaType.hasSubTypes(1)) {
                     return convertJavatToPythonType(javaType.getSubType(0), generics);
                 }
-                return "any";
-            case "void":
-                return "None";
+                return "object";
+        }
+
+        try {
+            Class<?> cls = Class.forName(javaType.getType());
+            if (!cls.equals(java.lang.Object.class)) {
+                if (Byte.class.equals(cls)) {
+                    return "bytes";
+                }
+                if (Double.class.equals(cls) || Float.class.equals(cls)) {
+                    return "float";
+                }
+                if (BigDecimal.class.equals(cls) || BigInteger.class.equals(cls) || Long.class.equals(cls)
+                        || Integer.class.equals(cls) || Short.class.equals(cls)) {
+                    return "int";
+                }
+                if (Number.class.equals(cls)) {
+                    return "float | int";
+                }
+                if (Collection.class.equals(cls) || Iterable.class.equals(cls) || List.class.equals(cls)
+                        || Set.class.equals(cls)) {
+                    if (javaType.hasSubTypes(1)) {
+                        return "list[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
+                    return "list";
+                }
+                if (Dictionary.class.equals(cls) || Hashtable.class.equals(cls) || Map.class.equals(cls)
+                        || HashMap.class.equals(cls)) {
+                    if (javaType.hasSubTypes(2)) {
+                        return "dict[" + convertJavatToPythonType(javaType.getSubType(0), generics) + ","
+                                + convertJavatToPythonType(javaType.getSubType(1), generics) + "]";
+                    }
+                    return "dict";
+                }
+                if (cls.equals(Class.class)) {
+                    if (javaType.hasSubTypes(1)) {
+                        return "type[" + convertJavatToPythonType(javaType.getSubType(0), generics) + "]";
+                    }
+                    return "type";
+                }
+            }
+        } catch (ClassNotFoundException e) {
         }
 
         return convertBaseJavaToPythonType(javaType, generics);
