@@ -57,7 +57,7 @@ public class ClassConverter {
     private static Pattern classMatcher = Pattern
             .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$_]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
 
-    private static Pattern instanceMatcher = Pattern.compile("^[a-z0-9\\.\\$_]+(@[a-z0-9]+)(?: .+)?$",
+    private static Pattern instanceMatcher = Pattern.compile("([a-z0-9\\.\\$_]+)[;]{0,1}@[a-z0-9]+",
             Pattern.CASE_INSENSITIVE);
 
     private static String baseUrl;
@@ -459,7 +459,7 @@ public class ClassConverter {
         String valueAsString = value.toString();
         Matcher matcher = instanceMatcher.matcher(valueAsString);
         if (matcher.find()) {
-            valueAsString = "<" + valueAsString.replace(matcher.group(1), "") + ">";
+            valueAsString = "<" + matcher.group(1) + ">";
         }
         return "\"" + valueAsString + "\"";
     }
