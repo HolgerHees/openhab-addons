@@ -82,15 +82,15 @@ public class ClassCollector {
 
     public Map<String, ClassContainer> collectReflectionClasses(Set<String> imports) throws Exception {
         List<Class<?>> clsList = new ArrayList<Class<?>>();
-        for (String _import : imports) {
-            if (_import.startsWith("__")) {
+        for (String imp : imports) {
+            if (imp.startsWith("__")) {
                 continue;
             }
 
             try {
-                clsList.add(Class.forName(_import));
+                clsList.add(Class.forName(imp));
             } catch (ClassNotFoundException e) {
-                logger.warn("Class " + _import + " not found");
+                logger.warn("Class " + imp + " not found");
             }
         }
         return processClasses(clsList);

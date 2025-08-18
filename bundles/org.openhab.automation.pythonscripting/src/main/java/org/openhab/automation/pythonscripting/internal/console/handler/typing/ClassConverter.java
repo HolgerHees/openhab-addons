@@ -54,18 +54,18 @@ import org.slf4j.LoggerFactory;
 public class ClassConverter {
     private final Logger logger = LoggerFactory.getLogger(ClassConverter.class);
 
-    private static Pattern CLASS_MATCHER = Pattern
+    private static Pattern classMatcher = Pattern
             .compile("(?:(?:super|extends) )?([a-z0-9\\.\\$_]+|\\?)(?:<.*?>|\\[\\])?$", Pattern.CASE_INSENSITIVE);
 
-    private static Pattern INSTANCE_MATCHER = Pattern.compile("^[a-z0-9\\.\\$_]+(@[a-z0-9]+)(?: .+)?$",
+    private static Pattern instanceMatcher = Pattern.compile("^[a-z0-9\\.\\$_]+(@[a-z0-9]+)(?: .+)?$",
             Pattern.CASE_INSENSITIVE);
 
-    private static String BASE_URL;
+    private static String baseUrl;
     static {
         // Version version = FrameworkUtil.getBundle(OpenHAB.class).getVersion();
         String v = "latest"; // version.getQualifier() == null || version.getQualifier().isEmpty() ? version.toString()
                              // : "latest";
-        BASE_URL = "https://www.openhab.org/javadoc/" + v + "/";
+        baseUrl = "https://www.openhab.org/javadoc/" + v + "/";
     }
 
     private final Map<String, String> classGenerics;
@@ -164,9 +164,9 @@ public class ClassConverter {
 
                 if (Collection.class.isAssignableFrom(field.getType())) {
                     List<String> values = new ArrayList<String>();
-                    if (field.get(null) instanceof Collection _values) {
-                        for (Object _value : _values) {
-                            values.add(convertFieldValue(_value));
+                    if (field.get(null) instanceof Collection col) {
+                        for (Object val : col) {
+                            values.add(convertFieldValue(val));
                         }
                     }
                     value = "[" + String.join(",", values) + "]";
@@ -202,7 +202,6 @@ public class ClassConverter {
     }
 
     private String buildClassMethod(MethodContainer method) {
-
         HashMap<String, String> localGenerics = new HashMap<String, String>(this.classGenerics);
         // Collect generics
         for (int i = 0; i < method.getReturnTypeCount(); i++) {
@@ -290,57 +289,55 @@ public class ClassConverter {
     private JavaType collectJavaTypes(Type genericType, Map<String, String> generics) {
         JavaType javaType = null;
         if (genericType instanceof TypeVariable) {
-            TypeVariable<?> _type = (TypeVariable<?>) genericType;
-            String type = generics.get(_type.getTypeName());
+            TypeVariable<?> typeVar = (TypeVariable<?>) genericType;
+            String type = generics.get(typeVar.getTypeName());
             if (type != null) {
                 javaType = new JavaType(type);
             } else {
                 javaType = new JavaType("?");
             }
         } else if (genericType instanceof ParameterizedType) {
-            ParameterizedType _type = (ParameterizedType) genericType;
+            ParameterizedType paramType = (ParameterizedType) genericType;
             // System.out.println("ParameterizedType | " + _type + " | " + _type.getRawType().getTypeName() + " | "
             // + _type.getActualTypeArguments()[0]);
-            javaType = collectJavaTypes(_type.getRawType(), generics);
-            for (Type __type : _type.getActualTypeArguments()) {
-                javaType.addSubType(collectJavaTypes(__type, generics));
+            javaType = collectJavaTypes(paramType.getRawType(), generics);
+            for (Type type : paramType.getActualTypeArguments()) {
+                javaType.addSubType(collectJavaTypes(type, generics));
             }
         } else if (genericType instanceof WildcardType) {
-            // TODO Not tested
-            WildcardType _type = (WildcardType) genericType;
+            WildcardType wildcardType = (WildcardType) genericType;
             // System.out.println("WildcardType | " + _type);
-            if (_type.getUpperBounds().length > 0) {
-                javaType = collectJavaTypes(_type.getUpperBounds()[0], generics);
-            } else if (_type.getLowerBounds().length > 0) {
-                javaType = collectJavaTypes(_type.getLowerBounds()[0], generics);
+            if (wildcardType.getUpperBounds().length > 0) {
+                javaType = collectJavaTypes(wildcardType.getUpperBounds()[0], generics);
+            } else if (wildcardType.getLowerBounds().length > 0) {
+                javaType = collectJavaTypes(wildcardType.getLowerBounds()[0], generics);
             } else {
                 javaType = new JavaType("java.lang.Object");
             }
         } else if (genericType instanceof GenericArrayType) {
-            // TODO Not tested
-            GenericArrayType _type = (GenericArrayType) genericType;
+            GenericArrayType genericArrayType = (GenericArrayType) genericType;
             // System.out.println("GenericArrayType | " + _type);
             javaType = new JavaType("java.util.List");
-            javaType.addSubType(collectJavaTypes(_type.getGenericComponentType(), generics));
+            javaType.addSubType(collectJavaTypes(genericArrayType.getGenericComponentType(), generics));
         } else {
             // System.out.println("OtherType | " + genericType.getTypeName());
             String type = genericType.getTypeName();
-            JavaType _javaType = null;
+            JavaType activeJavaType = null;
             while (type.endsWith("[]")) {
-                JavaType __javaType = new JavaType("java.util.List");
-                if (_javaType == null) {
-                    javaType = _javaType = __javaType;
+                JavaType currentJavaType = new JavaType("java.util.List");
+                if (activeJavaType == null) {
+                    javaType = activeJavaType = currentJavaType;
                 } else {
-                    _javaType.addSubType(__javaType);
+                    activeJavaType.addSubType(currentJavaType);
                 }
-                _javaType = __javaType;
+                activeJavaType = currentJavaType;
                 type = type.substring(0, type.length() - 2);
             }
-            JavaType __javaType = new JavaType(type);
+            JavaType currentJavaType = new JavaType(type);
             if (javaType == null) {
-                javaType = __javaType;
+                javaType = currentJavaType;
             } else {
-                _javaType.addSubType(__javaType);
+                activeJavaType.addSubType(currentJavaType);
             }
         }
 
@@ -437,9 +434,9 @@ public class ClassConverter {
                     }
                     return "\"" + className + "\"";
                 } else if (typeName.length() == 1) {
-                    String _typeName = generics.get(typeName);
-                    if (_typeName != null) {
-                        return _typeName;
+                    String newTypeName = generics.get(typeName);
+                    if (newTypeName != null) {
+                        return newTypeName;
                     }
                 }
                 return typeName;
@@ -460,7 +457,7 @@ public class ClassConverter {
             return "\"" + value.toString() + "\"";
         }
         String valueAsString = value.toString();
-        Matcher matcher = INSTANCE_MATCHER.matcher(valueAsString);
+        Matcher matcher = instanceMatcher.matcher(valueAsString);
         if (matcher.find()) {
             valueAsString = "<" + valueAsString.replace(matcher.group(1), "") + ">";
         }
@@ -473,25 +470,25 @@ public class ClassConverter {
 
     private Map<String, String> collectGenerics(Type genericType, Map<String, String> generics) {
         if (genericType instanceof TypeVariable) {
-            TypeVariable<?> _type = (TypeVariable<?>) genericType;
-            if (!generics.containsKey(_type.getTypeName())) {
-                generics.put(_type.getTypeName(), cleanClassName(_type.getBounds()[0].getTypeName()));
+            TypeVariable<?> typeVar = (TypeVariable<?>) genericType;
+            if (!generics.containsKey(typeVar.getTypeName())) {
+                generics.put(typeVar.getTypeName(), cleanClassName(typeVar.getBounds()[0].getTypeName()));
             }
         } else if (genericType instanceof ParameterizedType) {
-            ParameterizedType _type = (ParameterizedType) genericType;
-            generics.putAll(collectGenerics(_type.getRawType(), generics));
-            for (Type _genericType : _type.getActualTypeArguments()) {
-                generics.putAll(collectGenerics(_genericType, generics));
+            ParameterizedType paramType = (ParameterizedType) genericType;
+            generics.putAll(collectGenerics(paramType.getRawType(), generics));
+            for (Type typeArg : paramType.getActualTypeArguments()) {
+                generics.putAll(collectGenerics(typeArg, generics));
             }
         } else if (genericType instanceof WildcardType) {
-            WildcardType _type = (WildcardType) genericType;
-            if (_type.getUpperBounds().length > 0) {
-                for (Type _genericType : _type.getUpperBounds()) {
-                    generics.putAll(collectGenerics(_genericType, generics));
+            WildcardType wildcardType = (WildcardType) genericType;
+            if (wildcardType.getUpperBounds().length > 0) {
+                for (Type upperType : wildcardType.getUpperBounds()) {
+                    generics.putAll(collectGenerics(upperType, generics));
                 }
-            } else if (_type.getLowerBounds().length > 0) {
-                for (Type _genericType : _type.getLowerBounds()) {
-                    generics.putAll(collectGenerics(_genericType, generics));
+            } else if (wildcardType.getLowerBounds().length > 0) {
+                for (Type lowerType : wildcardType.getLowerBounds()) {
+                    generics.putAll(collectGenerics(lowerType, generics));
                 }
             }
         }
@@ -499,7 +496,7 @@ public class ClassConverter {
     }
 
     private String cleanClassName(String className) {
-        Matcher matcher = CLASS_MATCHER.matcher(className);
+        Matcher matcher = classMatcher.matcher(className);
         if (matcher.find() && !className.equals(matcher.group(1))) {
             // System.out.println("parseSubType: " + container.getRelatedClass().getName() + " | "
             // + _type.getTypeName() + " | " + javaSubType + " | " + matcher.group(1));
@@ -513,7 +510,7 @@ public class ClassConverter {
             return null;
         }
 
-        String classUrl = BASE_URL
+        String classUrl = baseUrl
                 + container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", ".");
 
         StringBuilder builder = new StringBuilder();
@@ -530,7 +527,7 @@ public class ClassConverter {
             return null;
         }
 
-        String classUrl = BASE_URL
+        String classUrl = baseUrl
                 + container.getRelatedClass().getName().toLowerCase().replace(".", "/").replace("$", ".");
 
         StringBuilder builder = new StringBuilder();

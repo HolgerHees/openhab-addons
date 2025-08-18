@@ -50,7 +50,6 @@ public class TypingCmd {
     }
 
     public void build() throws Exception {
-
         Path outputPath = PythonScriptEngineConfiguration.PYTHON_TYPINGS_PATH;
 
         // Cleanup Directory
@@ -90,7 +89,6 @@ public class TypingCmd {
     }
 
     public void dumpInit(String path, Map<String, ClassContainer> fileContainerMap) throws IOException {
-
         File root = new File(path);
         File[] list = root.listFiles();
         if (list == null) {
