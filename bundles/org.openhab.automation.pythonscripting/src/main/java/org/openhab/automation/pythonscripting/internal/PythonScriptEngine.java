@@ -138,10 +138,6 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             .targetTypeMapping(Value.class, Set.class, v -> v.hasArrayElements(),
                     PythonScriptEngine::transformArrayToSet, HostAccess.TargetMappingPrecedence.LOW)
 
-            // Translate python item to org.openhab.core.items.Item
-            // .targetTypeMapping(Value.class, Item.class, v -> v.hasMember("raw_item"),
-            // v -> v.getMember("raw_item").as(Item.class), HostAccess.TargetMappingPrecedence.LOW)
-
             // Translate python values to State
             .targetTypeMapping(Value.class, State.class, null, PythonScriptEngine::transformValueToState,
                     HostAccess.TargetMappingPrecedence.LOW)
@@ -489,8 +485,6 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
 
         if (!isClosed()) {
             try {
-                // logger.info("LifecycleTracker '{}' close", this.engineIdentifier);
-                // this.getPolyglotContext(); => only needed if engine was closed before
                 this.lifecycleTracker.dispose();
                 logger.debug("LifecycleTracker for engine '{}' disposed.", this.engineIdentifier);
             } catch (Exception e) {
@@ -499,7 +493,6 @@ public class PythonScriptEngine extends InvocationInterceptingPythonScriptEngine
             }
 
             try {
-                // logger.info("Engine '{}' close", this.engineIdentifier);
                 super.close();
                 logger.debug("Engine '{}' closed.", this.engineIdentifier);
             } catch (Exception e) {
