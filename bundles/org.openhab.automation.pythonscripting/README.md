@@ -64,7 +64,7 @@ Check via Web UI => Settings / Add-on Settings / Python Scripting
 
 ![Pythonscripting configuration](doc/pythonscripting_configuration.png)
 
-or via a config file `/optnhab/services/pythonscripting.cfg` like below.
+or via a config file `/openhab/services/pythonscripting.cfg` like below.
 
 ```
 # Use scope and import wrapper
