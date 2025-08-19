@@ -60,11 +60,11 @@ including all examples above, much more detailed.
 
 ### Configuration
 
-Check via Web UI => Settings / Add-on Settings / Python Scripting
+Web based config dialog can be found via Web UI => Settings / Add-on Settings / Python Scripting
 
 ![Pythonscripting configuration](doc/pythonscripting_configuration.png)
 
-or via a config file `/openhab/services/pythonscripting.cfg` like below.
+Additionally, you can configure the Add-on via a config file `/openhab/services/pythonscripting.cfg` like below.
 
 ```
 # Use scope and import wrapper
@@ -120,6 +120,8 @@ or via a config file `/openhab/services/pythonscripting.cfg` like below.
 #
 #org.openhab.automation.pythonscripting:jythonEmulation = false
 ```
+
+If you use the marketplace version of this Add-on, it is neccessary to use the config file. OpenHAB has a bug which prevents the web based config dialog to work correctly for `kar` file based Add-ons.
 
 ### Console
 
